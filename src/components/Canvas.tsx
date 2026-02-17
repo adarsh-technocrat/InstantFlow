@@ -206,9 +206,17 @@ export function Canvas() {
       const rect = el.getBoundingClientRect();
       const containerX = e.clientX - rect.left;
       const containerY = e.clientY - rect.top;
-      zoomAtPoint(containerX, containerY, e.deltaY);
+      const isZoom = e.ctrlKey || e.metaKey;
+      if (isZoom) {
+        zoomAtPoint(containerX, containerY, e.deltaY);
+      } else {
+        setTransform({
+          x: x - e.deltaX,
+          y: y - e.deltaY,
+        });
+      }
     },
-    [zoomAtPoint],
+    [zoomAtPoint, setTransform, x, y],
   );
 
   useEffect(() => {
