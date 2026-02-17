@@ -2,6 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
+import { SelectionToast } from "@/components/custom-toast/selection-toast";
 import { Frame } from "@/components/Frame";
 import { useCanvas } from "@/hooks/useCanvas";
 
@@ -54,6 +55,8 @@ export function Canvas() {
     setSelectedFrames,
     toggleFrameInSelection,
     updateFrame,
+    removeFrame,
+    duplicateFrame,
     zoomAtPoint,
   } = useCanvas();
 
@@ -197,13 +200,28 @@ export function Canvas() {
     } else {
       const label =
         count === 1 ? "1 screen selected" : `${count} screens selected`;
-      toast(label, {
-        id: "selection",
-        description:
-          "⌘C to copy · Delete to remove · Hold ⌘ to add/remove · Space to pan",
-      });
+      toast.custom(
+        () => (
+          <SelectionToast
+            message={label}
+            onCopy={() => {
+              if (selectedFrameIds[0]) duplicateFrame(selectedFrameIds[0]);
+            }}
+            onDelete={() => {
+              selectedFrameIds.forEach((id) => removeFrame(id));
+              toast.dismiss("selection");
+            }}
+          />
+        ),
+        {
+          id: "selection",
+          duration: Infinity,
+          position: "bottom-center",
+          closeButton: false,
+        },
+      );
     }
-  }, [selectedFrameIds]);
+  }, [selectedFrameIds, duplicateFrame, removeFrame]);
 
   const handleWheel = useCallback(
     (e: WheelEvent) => {

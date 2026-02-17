@@ -117,7 +117,6 @@ export function Frame({
       onPointerLeave={handlePointerLeave}
       onPointerCancel={handlePointerUp}
     >
-      {/* Dotted border overlay on hover or when selected - rectangle, no rounded corners */}
       {showDottedBorder && (
         <div
           className="pointer-events-none absolute -inset-3 z-30 rounded-none border-2 border-dotted border-(--frame-border)"
@@ -125,23 +124,18 @@ export function Frame({
         />
       )}
 
-      {/* Phone shape (clipped container) */}
-      <div
-        className="absolute isolate size-full overflow-hidden"
-        style={{
-          transform: "translateZ(0px)",
-          backfaceVisibility: "hidden",
-          clipPath: PHONE_CLIP_PATH,
-        }}
-      >
-        {children ?? (
-          <div
-            className="size-full bg-white dark:bg-zinc-900"
-            title="Canvas Frame"
-          />
-        )}
+      <div className="absolute isolate size-full filter-[drop-shadow(0_0_2px_rgb(212_212_216))] dark:filter-[drop-shadow(0_0_2px_rgb(113_113_122))]">
+        <div
+          className="absolute inset-0 overflow-hidden bg-white dark:bg-zinc-900"
+          style={{
+            transform: "translateZ(0px)",
+            backfaceVisibility: "hidden",
+            clipPath: PHONE_CLIP_PATH,
+          }}
+        >
+          {children ?? <div className="size-full" title="Canvas Frame" />}
+        </div>
       </div>
-      {/* Selected overlay (primary tint, same shape as phone) */}
       {selected && (
         <div
           className="pointer-events-none absolute inset-0 overflow-hidden bg-primary/15"
@@ -151,7 +145,6 @@ export function Frame({
       )}
       <div className="pointer-events-none absolute inset-0 z-40" />
 
-      {/* Frame toolbar (exact match to reference) - shown on hover or select */}
       {showToolbar && (
         <FrameToolbar
           label={label}
@@ -160,7 +153,6 @@ export function Frame({
         />
       )}
 
-      {/* Frame label (below toolbar when toolbar visible, else default position) */}
       <div
         className="absolute left-0 flex items-center gap-3 truncate whitespace-nowrap text-sm"
         style={{

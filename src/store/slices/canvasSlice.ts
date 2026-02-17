@@ -57,6 +57,21 @@ const canvasSlice = createSlice({
     },
     removeFrame: (state, action: { payload: string }) => {
       state.frames = state.frames.filter((f) => f.id !== action.payload);
+      state.selectedFrameIds = state.selectedFrameIds.filter(
+        (id) => id !== action.payload,
+      );
+    },
+    duplicateFrame: (state, action: { payload: string }) => {
+      const frame = state.frames.find((f) => f.id === action.payload);
+      if (!frame) return;
+      const newId = String(Date.now());
+      state.frames.push({
+        ...frame,
+        id: newId,
+        left: frame.left + 40,
+        top: frame.top + 40,
+      });
+      state.selectedFrameIds = [newId];
     },
     reorderFrames: (state, action: { payload: string[] }) => {
       const order = action.payload;
@@ -83,6 +98,7 @@ export const {
   addFrame,
   updateFrame,
   removeFrame,
+  duplicateFrame,
   reorderFrames,
   setSelectedFrames,
   toggleFrameInSelection,

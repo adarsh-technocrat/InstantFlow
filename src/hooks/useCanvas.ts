@@ -9,6 +9,7 @@ import {
   addFrame,
   updateFrame,
   removeFrame,
+  duplicateFrame,
   reorderFrames,
   type CanvasTransform,
   type FrameState,
@@ -134,6 +135,10 @@ export function useCanvas() {
     addFrame: addFrameAction,
     updateFrame: updateFrameAction,
     removeFrame: removeFrameAction,
+    duplicateFrame: useCallback(
+      (id: string) => dispatch(duplicateFrame(id)),
+      [dispatch],
+    ),
     reorderFrames: reorderFramesAction,
   };
 }
