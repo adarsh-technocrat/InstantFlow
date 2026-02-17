@@ -1,18 +1,22 @@
 "use client";
 
 import { useCanvas } from "@/hooks/useCanvas";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { setCanvasToolMode, type CanvasToolMode } from "@/store/slices/uiSlice";
 
 function ToolbarButton({
   children,
   disabled,
   title,
   onClick,
+  selected,
   className = "",
 }: {
   children: React.ReactNode;
   disabled?: boolean;
   title?: string;
   onClick?: () => void;
+  selected?: boolean;
   className?: string;
 }) {
   return (
@@ -22,8 +26,11 @@ function ToolbarButton({
       disabled={disabled}
       onClick={onClick}
       className={
-        "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-sm font-medium outline-none transition-[color,box-shadow,scale] text-foreground hover:bg-secondary/80 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-95 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4 " +
-        className
+        "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-sm font-medium outline-none transition-[color,box-shadow,scale] focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-95 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4 " +
+        (selected
+          ? "bg-[#48413f] text-[#fafafa]"
+          : "text-foreground hover:bg-secondary/80") +
+        (className ? " " + className : "")
       }
     >
       {children}
@@ -33,11 +40,20 @@ function ToolbarButton({
 
 export function CanvasBottomRight() {
   const { zoomPercent, zoomIn, zoomOut } = useCanvas();
+  const dispatch = useAppDispatch();
+  const canvasToolMode = useAppSelector((s) => s.ui.canvasToolMode);
+
+  const setMode = (mode: CanvasToolMode) => () =>
+    dispatch(setCanvasToolMode(mode));
 
   return (
     <div className="absolute bottom-4 right-4 z-10 flex w-auto flex-row items-center gap-2 rounded-xl bg-panel-glass p-2 backdrop-blur-md">
       <div className="flex items-center gap-1">
-        <ToolbarButton title="Link / Connect">
+        <ToolbarButton
+          title="Select"
+          selected={canvasToolMode === "select"}
+          onClick={setMode("select")}
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="1em"
@@ -48,7 +64,11 @@ export function CanvasBottomRight() {
             <path d="M168,132.69,214.08,115l.33-.13A16,16,0,0,0,213,85.07L52.92,32.8A15.95,15.95,0,0,0,32.8,52.92L85.07,213a15.82,15.82,0,0,0,14.41,11l.78,0a15.84,15.84,0,0,0,14.61-9.59l.13-.33L132.69,168,184,219.31a16,16,0,0,0,22.63,0l12.68-12.68a16,16,0,0,0,0-22.63ZM195.31,208,144,156.69a16,16,0,0,0-26,4.93c0,.11-.09.22-.13.32l-17.65,46L48,48l159.85,52.2-45.95,17.64-.32.13a16,16,0,0,0-4.93,26h0L208,195.31Z" />
           </svg>
         </ToolbarButton>
-        <ToolbarButton title="Hand">
+        <ToolbarButton
+          title="Hand"
+          selected={canvasToolMode === "hand"}
+          onClick={setMode("hand")}
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="1em"
