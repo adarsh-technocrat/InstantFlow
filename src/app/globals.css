@@ -10,8 +10,11 @@
   --accent-foreground: #18181b;
   --muted-foreground: #71717a;
   --foreground-muted: #71717a;
-  /* Light purple dotted border for frame hover/selection (like reference) */
   --frame-border: #a78bfa;
+  /* Layout glass – theme-aligned (light) */
+  --panel-glass-bg: rgba(255, 255, 255, 0.88);
+  --panel-glass-border: rgba(228, 228, 231, 0.6);
+  --panel-glass-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
   --primary: #18181b;
   --primary-foreground: #fafafa;
   --secondary: #f4f4f5;
@@ -22,10 +25,16 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-border: var(--border);
+  --color-ring: var(--ring);
   --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted-foreground: var(--muted-foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -39,10 +48,14 @@
     --muted-foreground: #a1a1aa;
     --foreground-muted: #a1a1aa;
     --frame-border: #c4b5fd;
-    --primary: #3b82f6;
-    --primary-foreground: #fff;
+    --primary: #18181b;
+    --primary-foreground: #fafafa;
     --secondary: #27272a;
     --secondary-foreground: #fafafa;
+    /* Layout glass – theme-aligned (dark) */
+    --panel-glass-bg: rgba(24, 24, 27, 0.88);
+    --panel-glass-border: rgba(39, 39, 42, 0.8);
+    --panel-glass-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
   }
 }
 
@@ -50,4 +63,17 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+.bg-panel-glass {
+  background: var(--panel-glass-bg);
+  border: 1px solid var(--panel-glass-border);
+  box-shadow: var(--panel-glass-shadow);
+}
+.shadow-panel-glass {
+  box-shadow: var(--panel-glass-shadow);
+}
+.reference-mode-button {
+  background: #48413f;
+  color: #fafafa;
 }

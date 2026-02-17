@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useState, useCallback, useEffect } from "react";
+import { toast } from "sonner";
 import { Frame } from "@/components/Frame";
-import { MultiSelectPanel } from "@/components/MultiSelectPanel";
 import { useCanvas } from "@/hooks/useCanvas";
 
 const FRAME_WIDTH = 430;
@@ -190,13 +190,20 @@ export function Canvas() {
     [setSelectedFrames, toggleFrameInSelection],
   );
 
-  const handleRemoveFromSelection = useCallback(
-    (id: string) => {
-      const current = selectedFrameIdsRef.current;
-      setSelectedFrames(current.filter((x) => x !== id));
-    },
-    [setSelectedFrames],
-  );
+  useEffect(() => {
+    const count = selectedFrameIds.length;
+    if (count === 0) {
+      toast.dismiss("selection");
+    } else {
+      const label =
+        count === 1 ? "1 screen selected" : `${count} screens selected`;
+      toast(label, {
+        id: "selection",
+        description:
+          "⌘C to copy · Delete to remove · Hold ⌘ to add/remove · Space to pan",
+      });
+    }
+  }, [selectedFrameIds]);
 
   const handleWheel = useCallback(
     (e: WheelEvent) => {
@@ -226,10 +233,6 @@ export function Canvas() {
     return () => el.removeEventListener("wheel", handleWheel);
   }, [handleWheel]);
 
-  const selectedFramesForPanel = frames.filter((f) =>
-    selectedFrameIds.includes(f.id),
-  );
-
   return (
     <div
       ref={containerRef}
@@ -253,16 +256,6 @@ export function Canvas() {
       role="application"
       aria-label="Canvas"
     >
-      {selectedFrameIds.length > 0 && (
-        <MultiSelectPanel
-          selectedFrames={selectedFramesForPanel.map((f) => ({
-            id: f.id,
-            label: f.label,
-          }))}
-          onRemoveFromSelection={handleRemoveFromSelection}
-        />
-      )}
-
       <div
         className={`absolute origin-top-left ${!isPanning ? "transition-transform duration-150 ease-out" : ""}`}
         style={{
@@ -271,7 +264,7 @@ export function Canvas() {
       >
         {marqueeStart.current && marqueeEnd && (
           <div
-            className="pointer-events-none absolute z-50 border-2 border-primary bg-primary/10"
+            className="pointer-events-none absolute z-50 border-2 border-[#48413f] bg-[#48413f]/10"
             style={{
               left: Math.min(marqueeStart.current.contentX, marqueeEnd.x),
               top: Math.min(marqueeStart.current.contentY, marqueeEnd.y),
