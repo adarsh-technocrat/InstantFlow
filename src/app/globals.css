@@ -3,6 +3,13 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --background-secondary: #f4f4f5;
+  --border: #e4e4e7;
+  --ring: #18181b;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --muted-foreground: #71717a;
+  --foreground-muted: #71717a;
 }
 
 @theme inline {
@@ -16,6 +23,12 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --background-secondary: #18181b;
+    --border: #27272a;
+    --accent: #27272a;
+    --accent-foreground: #fafafa;
+    --muted-foreground: #a1a1aa;
+    --foreground-muted: #a1a1aa;
   }
 }
 
