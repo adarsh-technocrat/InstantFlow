@@ -34,8 +34,10 @@ export interface FrameProps {
   top?: number;
   /** Whether this frame is selected */
   selected?: boolean;
-  /** Called when frame is clicked (select) */
-  onSelect?: () => void;
+  /** Called when frame is clicked. (id, metaKey): if metaKey toggle in selection, else set selection to [id]. */
+  onSelect?: (id: string, metaKey: boolean) => void;
+  /** Show toolbar (only when single selection). Defaults to selected */
+  showToolbar?: boolean;
   /** Canvas scale for toolbar sizing */
   canvasScale?: number;
   /** Called when frame is dragged to a new position (canvas coordinates) */
@@ -51,6 +53,7 @@ export function Frame({
   top = -500,
   selected = false,
   onSelect,
+  showToolbar: showToolbarProp = undefined,
   canvasScale = 0.556382,
   onPositionChange,
   children,
@@ -64,18 +67,18 @@ export function Frame({
     top: number;
   } | null>(null);
   const showDottedBorder = isHovered || selected;
-  const showToolbar = selected;
+  const showToolbar = showToolbarProp ?? selected;
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0) return;
       e.stopPropagation();
-      onSelect?.();
+      onSelect?.(id, e.metaKey);
       dragStart.current = { clientX: e.clientX, clientY: e.clientY, left, top };
       setIsDragging(true);
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     },
-    [onSelect, left, top],
+    [onSelect, id, left, top],
   );
 
   const handlePointerMove = useCallback(
@@ -117,7 +120,7 @@ export function Frame({
       {/* Dotted border overlay on hover or when selected - rectangle, no rounded corners */}
       {showDottedBorder && (
         <div
-          className="pointer-events-none absolute inset-0 z-30 rounded-none border-2 border-dotted border-(--frame-border)"
+          className="pointer-events-none absolute -inset-3 z-30 rounded-none border-2 border-dotted border-(--frame-border)"
           aria-hidden
         />
       )}
@@ -138,6 +141,14 @@ export function Frame({
           />
         )}
       </div>
+      {/* Selected overlay (primary tint, same shape as phone) */}
+      {selected && (
+        <div
+          className="pointer-events-none absolute inset-0 overflow-hidden bg-primary/15"
+          style={{ clipPath: PHONE_CLIP_PATH }}
+          aria-hidden
+        />
+      )}
       <div className="pointer-events-none absolute inset-0 z-40" />
 
       {/* Frame toolbar (exact match to reference) - shown on hover or select */}

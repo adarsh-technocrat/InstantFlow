@@ -16,11 +16,11 @@ export interface FrameState {
 interface CanvasState {
   transform: CanvasTransform;
   frames: FrameState[];
-  selectedFrameId: string | null;
+  selectedFrameIds: string[];
 }
 
 const initialState: CanvasState = {
-  selectedFrameId: null,
+  selectedFrameIds: [],
   transform: {
     x: 255.24,
     y: 410.117,
@@ -62,8 +62,17 @@ const canvasSlice = createSlice({
       const order = action.payload;
       state.frames.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
     },
-    setSelectedFrame: (state, action: { payload: string | null }) => {
-      state.selectedFrameId = action.payload;
+    setSelectedFrames: (state, action: { payload: string[] }) => {
+      state.selectedFrameIds = action.payload;
+    },
+    toggleFrameInSelection: (state, action: { payload: string }) => {
+      const id = action.payload;
+      const i = state.selectedFrameIds.indexOf(id);
+      if (i >= 0) {
+        state.selectedFrameIds = state.selectedFrameIds.filter((x) => x !== id);
+      } else {
+        state.selectedFrameIds = [...state.selectedFrameIds, id];
+      }
     },
   },
 });
@@ -75,7 +84,8 @@ export const {
   updateFrame,
   removeFrame,
   reorderFrames,
-  setSelectedFrame,
+  setSelectedFrames,
+  toggleFrameInSelection,
 } = canvasSlice.actions;
 
 export default canvasSlice.reducer;

@@ -4,7 +4,8 @@ import { useCallback } from "react";
 import {
   setTransform,
   setZoom,
-  setSelectedFrame,
+  setSelectedFrames,
+  toggleFrameInSelection,
   addFrame,
   updateFrame,
   removeFrame,
@@ -25,7 +26,7 @@ export const CANVAS_ZOOM = {
 
 export function useCanvas() {
   const dispatch = useAppDispatch();
-  const { transform, frames, selectedFrameId } = useAppSelector(
+  const { transform, frames, selectedFrameIds } = useAppSelector(
     (state) => state.canvas,
   );
 
@@ -99,8 +100,13 @@ export function useCanvas() {
     [dispatch],
   );
 
-  const setSelectedFrameAction = useCallback(
-    (id: string | null) => dispatch(setSelectedFrame(id)),
+  const setSelectedFramesAction = useCallback(
+    (ids: string[]) => dispatch(setSelectedFrames(ids)),
+    [dispatch],
+  );
+
+  const toggleFrameInSelectionAction = useCallback(
+    (id: string) => dispatch(toggleFrameInSelection(id)),
     [dispatch],
   );
 
@@ -110,11 +116,12 @@ export function useCanvas() {
     // State
     transform,
     frames,
-    selectedFrameId,
+    selectedFrameIds,
     zoomPercent,
 
     // Selection
-    setSelectedFrame: setSelectedFrameAction,
+    setSelectedFrames: setSelectedFramesAction,
+    toggleFrameInSelection: toggleFrameInSelectionAction,
 
     // Transform
     setTransform: setTransformAction,

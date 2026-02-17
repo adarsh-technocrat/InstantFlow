@@ -12,12 +12,18 @@
   --foreground-muted: #71717a;
   /* Light purple dotted border for frame hover/selection (like reference) */
   --frame-border: #a78bfa;
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -33,6 +39,10 @@
     --muted-foreground: #a1a1aa;
     --foreground-muted: #a1a1aa;
     --frame-border: #c4b5fd;
+    --primary: #3b82f6;
+    --primary-foreground: #fff;
+    --secondary: #27272a;
+    --secondary-foreground: #fafafa;
   }
 }
 
