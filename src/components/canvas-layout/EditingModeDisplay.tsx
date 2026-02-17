@@ -19,7 +19,7 @@ function ChatToggleButton() {
     <button
       type="button"
       onClick={() => dispatch(toggleChatPanel())}
-      className="inline-flex size-14 shrink-0 items-center justify-center rounded-full bg-panel-glass text-foreground outline-none transition-[color,box-shadow] backdrop-blur-md hover:bg-secondary/80 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-95"
+      className="inline-flex size-14 shrink-0 items-center justify-center rounded-full bg-canvas-panel text-white/90 outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-95"
       aria-label={isOpen ? "Close chat" : "Open chat"}
     >
       <svg
@@ -56,18 +56,18 @@ export function EditingModeDisplay() {
         onClose={() => dispatch(setChatPanelOpen(false))}
       />
       <ChatToggleButton />
-      <div className="flex flex-col items-center justify-center gap-4 rounded-xl bg-panel-glass px-2 py-3 backdrop-blur-md">
+      <div className="flex flex-col items-center justify-center gap-4 rounded-full bg-canvas-panel px-2 py-3">
         <div className="relative">
           <button
             type="button"
             onClick={() => setReferenceMode((v) => !v)}
-            className={`rounded-md p-2 ${referenceMode ? "reference-mode-button" : "text-foreground hover:bg-secondary/80"}`}
+            className={`rounded-md p-2 ${referenceMode ? "reference-mode-button" : "text-white/90 hover:bg-white/10"}`}
           >
             <ReferenceModeIcon
               color={
                 referenceMode
                   ? "var(--primary-foreground)"
-                  : "var(--foreground)"
+                  : "rgba(255,255,255,0.9)"
               }
             />
           </button>
@@ -75,7 +75,7 @@ export function EditingModeDisplay() {
             <button
               type="button"
               onClick={() => setReferenceMode(false)}
-              className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-background text-xs font-bold text-foreground"
+              className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-xs font-bold text-white"
             >
               ×
             </button>
@@ -84,18 +84,20 @@ export function EditingModeDisplay() {
         <button
           type="button"
           onClick={() => setSectionalMode((v) => !v)}
-          className={`relative rounded-md p-2 ${sectionalMode ? "reference-mode-button" : "text-foreground hover:bg-secondary/80"}`}
+          className={`relative rounded-md p-2 ${sectionalMode ? "reference-mode-button" : "text-white/90 hover:bg-white/10"}`}
         >
           <SectionalEditIcon
             color={
-              sectionalMode ? "var(--primary-foreground)" : "var(--foreground)"
+              sectionalMode
+                ? "var(--primary-foreground)"
+                : "rgba(255,255,255,0.9)"
             }
           />
           {sectionalMode && (
             <button
               type="button"
               onClick={() => setSectionalMode(false)}
-              className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-background text-xs font-bold text-foreground"
+              className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-xs font-bold text-white"
             >
               ×
             </button>
@@ -105,13 +107,13 @@ export function EditingModeDisplay() {
           <button
             type="button"
             onClick={() => setTextEditingMode((v) => !v)}
-            className={`rounded-md p-2 ${textEditingMode ? "reference-mode-button" : "text-foreground hover:bg-secondary/80"}`}
+            className={`rounded-md p-2 ${textEditingMode ? "reference-mode-button" : "text-white/90 hover:bg-white/10"}`}
           >
             <TextEditingIcon
               color={
                 textEditingMode
                   ? "var(--primary-foreground)"
-                  : "var(--foreground)"
+                  : "rgba(255,255,255,0.9)"
               }
             />
           </button>
@@ -119,7 +121,7 @@ export function EditingModeDisplay() {
             <button
               type="button"
               onClick={() => setTextEditingMode(false)}
-              className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-background text-xs font-bold text-foreground"
+              className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-xs font-bold text-white"
             >
               ×
             </button>
@@ -129,13 +131,13 @@ export function EditingModeDisplay() {
           <button
             type="button"
             onClick={() => setStyleGuideOpen((v) => !v)}
-            className={`rounded-md p-2 ${styleGuideOpen ? "reference-mode-button" : "text-foreground hover:bg-secondary/80"}`}
+            className={`rounded-md p-2 ${styleGuideOpen ? "reference-mode-button" : "text-white/90 hover:bg-white/10"}`}
           >
             <StyleGuideIcon
               color={
                 styleGuideOpen
                   ? "var(--primary-foreground)"
-                  : "var(--foreground)"
+                  : "rgba(255,255,255,0.9)"
               }
               width={20}
               height={20}
@@ -145,7 +147,7 @@ export function EditingModeDisplay() {
             <button
               type="button"
               onClick={() => setStyleGuideOpen(false)}
-              className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-background text-xs font-bold text-foreground"
+              className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-xs font-bold text-white"
             >
               ×
             </button>

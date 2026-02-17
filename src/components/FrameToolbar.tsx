@@ -8,7 +8,7 @@ function DragHandleIcon() {
       height="1em"
       fill="currentColor"
       viewBox="0 0 256 256"
-      className="size-4 shrink-0 text-(--foreground-muted)"
+      className="size-4 shrink-0 text-white/70"
     >
       <path d="M104,60A12,12,0,1,1,92,48,12,12,0,0,1,104,60Zm60,12a12,12,0,1,0-12-12A12,12,0,0,0,164,72ZM92,116a12,12,0,1,0,12,12A12,12,0,0,0,92,116Zm72,0a12,12,0,1,0,12,12A12,12,0,0,0,164,116ZM92,184a12,12,0,1,0,12,12A12,12,0,0,0,92,184Zm72,0a12,12,0,1,0,12,12A12,12,0,0,0,164,184Z" />
     </svg>
@@ -107,7 +107,7 @@ function MoreIcon() {
 }
 
 const toolbarButtonClass =
-  "inline-flex size-6 shrink-0 items-center justify-center rounded-md text-sm font-medium outline-none transition-[color,box-shadow,scale] hover:bg-(--accent) hover:text-(--accent-foreground) focus-visible:ring-[3px] focus-visible:ring-(--ring)/50 active:scale-95 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0";
+  "inline-flex size-6 shrink-0 items-center justify-center rounded-md text-sm font-medium text-white/90 outline-none transition-[color,box-shadow,scale] hover:bg-white/10 focus-visible:ring-[3px] focus-visible:ring-(--ring)/50 active:scale-95 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0";
 
 /** Desired gap between frame and toolbar in screen pixels (stays constant when zooming) */
 const TOOLBAR_GAP_SCREEN_PX = 48;
@@ -129,7 +129,7 @@ export function FrameToolbar({
     canvasScale > 0 ? TOOLBAR_GAP_SCREEN_PX / canvasScale : 70;
   return (
     <div
-      className="absolute left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-md border border-border bg-background px-2 py-1 shadow-sm"
+      className="absolute left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-md border border-white/10 bg-canvas-panel px-2 py-1 shadow-sm"
       style={{
         transform: `scale(${scale})`,
         top: `-${topOffsetPx}px`,
@@ -140,7 +140,7 @@ export function FrameToolbar({
         <DragHandleIcon />
         <div className="min-w-18 flex flex-col gap-2 font-medium text-sm">
           <div
-            className="relative inline-block min-w-0 cursor-default select-none truncate rounded border border-transparent py-0 text-sm hover:text-(--foreground-muted)"
+            className="relative inline-block min-w-0 cursor-default select-none truncate rounded border border-transparent py-0 text-sm text-white/90 hover:text-white/70"
             role="button"
             tabIndex={0}
           >
@@ -148,7 +148,7 @@ export function FrameToolbar({
           </div>
         </div>
       </div>
-      <div className="h-4 w-px bg-border" />
+      <div className="h-4 w-px bg-white/20" />
       <div className="flex items-center gap-1">
         <button type="button" className={toolbarButtonClass} title="Code">
           <CodeIcon />
@@ -166,7 +166,7 @@ export function FrameToolbar({
         <button type="button" className={toolbarButtonClass} title="Download">
           <DownloadIcon />
         </button>
-        <div className="mx-1 h-4 w-px bg-border" />
+        <div className="mx-1 h-4 w-px bg-white/20" />
         <button
           type="button"
           className={toolbarButtonClass}

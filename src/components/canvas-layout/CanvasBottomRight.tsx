@@ -29,7 +29,7 @@ function ToolbarButton({
         "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-sm font-medium outline-none transition-[color,box-shadow,scale] focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-95 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4 " +
         (selected
           ? "bg-[#48413f] text-[#fafafa]"
-          : "text-foreground hover:bg-secondary/80") +
+          : "text-white/90 hover:bg-white/10") +
         (className ? " " + className : "")
       }
     >
@@ -47,7 +47,7 @@ export function CanvasBottomRight() {
     dispatch(setCanvasToolMode(mode));
 
   return (
-    <div className="absolute bottom-4 right-4 z-10 flex w-auto flex-row items-center gap-2 rounded-xl bg-panel-glass p-2 backdrop-blur-md">
+    <div className="absolute bottom-4 right-4 z-10 flex w-auto flex-row items-center gap-2 rounded-xl bg-canvas-panel p-2">
       <div className="flex items-center gap-1">
         <ToolbarButton
           title="Select"
@@ -102,7 +102,7 @@ export function CanvasBottomRight() {
           </svg>
         </ToolbarButton>
       </div>
-      <div className="h-4 w-px shrink-0 bg-border/60" role="none" />
+      <div className="h-4 w-px shrink-0 bg-white/20" role="none" />
       <div className="flex items-center">
         <ToolbarButton title="Zoom out" onClick={zoomOut}>
           <svg
@@ -115,7 +115,7 @@ export function CanvasBottomRight() {
             <path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z" />
           </svg>
         </ToolbarButton>
-        <div className="min-w-10 text-center text-sm text-foreground">
+        <div className="min-w-10 text-center text-sm text-white/90">
           {zoomPercent}%
         </div>
         <ToolbarButton title="Zoom in" onClick={zoomIn}>

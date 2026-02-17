@@ -32,6 +32,7 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-muted-foreground: var(--muted-foreground);
+  --color-input: var(--background);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -76,4 +77,10 @@ body {
 .reference-mode-button {
   background: #48413f;
   color: #fafafa;
+}
+
+/* Canvas layout panels – matches ChatPanel (#0d0807) */
+.bg-canvas-panel {
+  background-color: #0d0807;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }

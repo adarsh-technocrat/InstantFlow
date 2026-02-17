@@ -126,8 +126,9 @@ export function Frame({
 
       <div className="absolute isolate size-full filter-[drop-shadow(0_0_2px_rgb(212_212_216))] dark:filter-[drop-shadow(0_0_2px_rgb(113_113_122))]">
         <div
-          className="absolute inset-0 overflow-hidden bg-white dark:bg-zinc-900"
+          className="absolute inset-0 overflow-hidden"
           style={{
+            backgroundColor: "#0d0807",
             transform: "translateZ(0px)",
             backfaceVisibility: "hidden",
             clipPath: PHONE_CLIP_PATH,
