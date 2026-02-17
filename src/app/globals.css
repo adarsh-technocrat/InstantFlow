@@ -10,11 +10,14 @@
   --accent-foreground: #18181b;
   --muted-foreground: #71717a;
   --foreground-muted: #71717a;
+  /* Light purple dotted border for frame hover/selection (like reference) */
+  --frame-border: #a78bfa;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-border: var(--border);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -29,6 +32,7 @@
     --accent-foreground: #fafafa;
     --muted-foreground: #a1a1aa;
     --foreground-muted: #a1a1aa;
+    --frame-border: #c4b5fd;
   }
 }
 

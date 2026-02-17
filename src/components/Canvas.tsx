@@ -5,7 +5,15 @@ import { Frame } from "@/components/Frame";
 import { useCanvas } from "@/hooks/useCanvas";
 
 export function Canvas() {
-  const { transform, frames, setTransform, zoomAtPoint } = useCanvas();
+  const {
+    transform,
+    frames,
+    selectedFrameId,
+    setTransform,
+    setSelectedFrame,
+    updateFrame,
+    zoomAtPoint,
+  } = useCanvas();
 
   const panStart = useRef<{
     x: number;
@@ -19,6 +27,7 @@ export function Canvas() {
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0) return;
+      setSelectedFrame(null);
       setIsPanning(true);
       panStart.current = {
         x: e.clientX,
@@ -28,7 +37,7 @@ export function Canvas() {
       };
       (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     },
-    [transform.x, transform.y],
+    [transform.x, transform.y, setSelectedFrame],
   );
 
   const handlePointerMove = useCallback(
@@ -98,9 +107,16 @@ export function Canvas() {
         {frames.map((frame) => (
           <Frame
             key={frame.id}
+            id={frame.id}
             label={frame.label}
             left={frame.left}
             top={frame.top}
+            selected={selectedFrameId === frame.id}
+            onSelect={() => setSelectedFrame(frame.id)}
+            canvasScale={scale}
+            onPositionChange={(newLeft, newTop) =>
+              updateFrame(frame.id, { left: newLeft, top: newTop })
+            }
           />
         ))}
       </div>

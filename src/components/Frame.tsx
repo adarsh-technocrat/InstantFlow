@@ -1,3 +1,8 @@
+"use client";
+
+import { useState, useRef, useCallback } from "react";
+import { FrameToolbar } from "@/components/FrameToolbar";
+
 export const PHONE_CLIP_PATH =
   'path("M 334 0 c 45.255 0 67.882 0 81.941 14.059 c 14.059 14.059 14.059 36.686 14.059 81.941 L 430 1024 c 0 45.255 0 67.882 -14.059 81.941 c -14.059 14.059 -36.686 14.059 -81.941 14.059 L 96 1120 c -45.255 0 -67.882 0 -81.941 -14.059 c -14.059 -14.059 -14.059 -36.686 -14.059 -81.941 L 0 96 c 0 -45.255 0 -67.882 14.059 -81.941 c 14.059 -14.059 36.686 -14.059 81.941 -14.059 Z")';
 
@@ -20,27 +25,103 @@ function DragHandleIcon() {
 }
 
 export interface FrameProps {
+  id: string;
   /** Display label above the frame (e.g. screen name) */
   label: string;
   /** Horizontal position in px (relative to canvas transform origin) */
   left: number;
   /** Vertical position in px (default: -500) */
   top?: number;
+  /** Whether this frame is selected */
+  selected?: boolean;
+  /** Called when frame is clicked (select) */
+  onSelect?: () => void;
+  /** Canvas scale for toolbar sizing */
+  canvasScale?: number;
+  /** Called when frame is dragged to a new position (canvas coordinates) */
+  onPositionChange?: (newLeft: number, newTop: number) => void;
   /** Optional content to render inside the phone screen. Defaults to a placeholder. */
   children?: React.ReactNode;
 }
 
-export function Frame({ label, left, top = -500, children }: FrameProps) {
+export function Frame({
+  id,
+  label,
+  left,
+  top = -500,
+  selected = false,
+  onSelect,
+  canvasScale = 0.556382,
+  onPositionChange,
+  children,
+}: FrameProps) {
+  const [isHovered, setIsHovered] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef<{
+    clientX: number;
+    clientY: number;
+    left: number;
+    top: number;
+  } | null>(null);
+  const showDottedBorder = isHovered || selected;
+  const showToolbar = selected;
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      e.stopPropagation();
+      onSelect?.();
+      dragStart.current = { clientX: e.clientX, clientY: e.clientY, left, top };
+      setIsDragging(true);
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    },
+    [onSelect, left, top],
+  );
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!dragStart.current || !onPositionChange) return;
+      const scale = canvasScale || 0.556382;
+      const dx = (e.clientX - dragStart.current.clientX) / scale;
+      const dy = (e.clientY - dragStart.current.clientY) / scale;
+      onPositionChange(dragStart.current.left + dx, dragStart.current.top + dy);
+    },
+    [canvasScale, onPositionChange],
+  );
+
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    dragStart.current = null;
+    setIsDragging(false);
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+  }, []);
+
+  const handlePointerEnter = useCallback(() => setIsHovered(true), []);
+  const handlePointerLeave = useCallback(() => setIsHovered(false), []);
+
   return (
     <div
-      className="absolute"
+      className={`absolute ${isDragging ? "cursor-grabbing" : ""}`}
       style={{
         left: `${left}px`,
         top: `${top}px`,
         width: FRAME_WIDTH,
         height: FRAME_HEIGHT,
       }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerLeave={handlePointerLeave}
+      onPointerCancel={handlePointerUp}
     >
+      {/* Dotted border overlay on hover or when selected - rectangle, no rounded corners */}
+      {showDottedBorder && (
+        <div
+          className="pointer-events-none absolute inset-0 z-30 rounded-none border-2 border-dotted border-(--frame-border)"
+          aria-hidden
+        />
+      )}
+
       {/* Phone shape (clipped container) */}
       <div
         className="absolute isolate size-full overflow-hidden"
@@ -58,13 +139,24 @@ export function Frame({ label, left, top = -500, children }: FrameProps) {
         )}
       </div>
       <div className="pointer-events-none absolute inset-0 z-40" />
-      {/* Frame label */}
+
+      {/* Frame toolbar (exact match to reference) - shown on hover or select */}
+      {showToolbar && (
+        <FrameToolbar
+          label={label}
+          scale={1 / canvasScale}
+          canvasScale={canvasScale}
+        />
+      )}
+
+      {/* Frame label (below toolbar when toolbar visible, else default position) */}
       <div
         className="absolute left-0 flex items-center gap-3 truncate whitespace-nowrap text-sm"
         style={{
           transform: "scale(1.79733)",
-          top: "-53.9198px",
+          top: showToolbar ? "-53.9198px" : "-53.9198px",
           transformOrigin: "left top",
+          visibility: showToolbar ? "hidden" : "visible",
         }}
       >
         <div

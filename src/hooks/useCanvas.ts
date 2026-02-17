@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import {
   setTransform,
   setZoom,
+  setSelectedFrame,
   addFrame,
   updateFrame,
   removeFrame,
@@ -14,8 +15,8 @@ import {
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 
 export const CANVAS_ZOOM = {
-  MIN: 0.2,
-  MAX: 1.5,
+  MIN: 0.05, // 5%
+  MAX: 8, // 800%
   STEP: 0.1,
   WHEEL_SENSITIVITY: 0.001,
   WHEEL_MAX_FACTOR: 0.92,
@@ -24,7 +25,9 @@ export const CANVAS_ZOOM = {
 
 export function useCanvas() {
   const dispatch = useAppDispatch();
-  const { transform, frames } = useAppSelector((state) => state.canvas);
+  const { transform, frames, selectedFrameId } = useAppSelector(
+    (state) => state.canvas,
+  );
 
   const setTransformAction = useCallback(
     (payload: Partial<CanvasTransform>) => dispatch(setTransform(payload)),
@@ -96,13 +99,22 @@ export function useCanvas() {
     [dispatch],
   );
 
+  const setSelectedFrameAction = useCallback(
+    (id: string | null) => dispatch(setSelectedFrame(id)),
+    [dispatch],
+  );
+
   const zoomPercent = Math.round(transform.scale * 100);
 
   return {
     // State
     transform,
     frames,
+    selectedFrameId,
     zoomPercent,
+
+    // Selection
+    setSelectedFrame: setSelectedFrameAction,
 
     // Transform
     setTransform: setTransformAction,
