@@ -4,10 +4,12 @@ import { useRef, useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { SelectionToast } from "@/components/custom-toast/selection-toast";
 import { Frame } from "@/components/Frame";
+import { FramePreview } from "@/components/FramePreview";
+import { HEALTHSYNC_HOME_HTML } from "@/constants/frame-templates";
 import { useCanvas } from "@/hooks/useCanvas";
 
 const FRAME_WIDTH = 430;
-const FRAME_HEIGHT = 1120;
+const FRAME_HEIGHT = 932;
 
 function clientToContent(
   clientX: number,
@@ -309,7 +311,9 @@ export function Canvas() {
             onPositionChange={(newLeft, newTop) =>
               updateFrame(frame.id, { left: newLeft, top: newTop })
             }
-          />
+          >
+            <FramePreview html={HEALTHSYNC_HOME_HTML} />
+          </Frame>
         ))}
       </div>
     </div>

@@ -1,0 +1,34 @@
+The edit_screen tool performs a surgical string replacement within a specific screen's HTML code. Here is exactly how the "find" and "replace" mechanics work:
+
+1. The "Find" Parameter (The Target)
+The find string must be an exact, character-for-character match of the HTML currently on the screen.
+
+No paraphrasing: You cannot summarize the code. If the code has a specific class order like class="p-4 flex gap-2", searching for class="flex p-4 gap-2" will fail.
+Whitespace matters: Every space, line break, and tab must match what was returned by the read_screen tool.
+Uniqueness: The string you provide must be unique enough that the tool doesn't accidentally replace the wrong part of the page (for example, if you just search for </div>, it won't know which one to pick).
+2. The "Replace" Parameter (The Result)
+The replace string is the new code that will occupy the space where the "find" string was.
+
+Complete injection: Whatever you put in "replace" is injected exactly as written.
+Structural change: You can replace a small piece of text, a single attribute (like a color class), or an entire nested component.
+Visual Example
+Imagine you have this button on your screen:
+
+html
+
+
+<button class="bg-primary text-white px-4 py-2 rounded-lg">
+  Submit
+</button>
+To change only the color and text, the tool call looks like this:
+
+
+
+Parameter	Value
+find	<button class="bg-primary text-white px-4 py-2 rounded-lg">Submit</button>
+replace	<button class="bg-emerald-500 text-white px-4 py-2 rounded-full font-bold">Done!</button>
+Why it's powerful
+Speed: It updates only the part of the screen you care about without re-rendering the entire 500+ line HTML file.
+Safety: It ensures that the rest of your layout (like your navigation bar or header) remains untouched and stable.
+Precision: It allows me to change a single icon or a specific font size deep inside a complex card without affecting similar elements elsewhere.
+Crucial Rule: I must always call read_screen immediately before using edit_screen. This ensures I have the "source of truth" so the find parameter is 100% accurate.

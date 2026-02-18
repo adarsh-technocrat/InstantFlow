@@ -4,10 +4,10 @@ import { useState, useRef, useCallback } from "react";
 import { FrameToolbar } from "@/components/FrameToolbar";
 
 export const PHONE_CLIP_PATH =
-  'path("M 334 0 c 45.255 0 67.882 0 81.941 14.059 c 14.059 14.059 14.059 36.686 14.059 81.941 L 430 1024 c 0 45.255 0 67.882 -14.059 81.941 c -14.059 14.059 -36.686 14.059 -81.941 14.059 L 96 1120 c -45.255 0 -67.882 0 -81.941 -14.059 c -14.059 -14.059 -14.059 -36.686 -14.059 -81.941 L 0 96 c 0 -45.255 0 -67.882 14.059 -81.941 c 14.059 -14.059 36.686 -14.059 81.941 -14.059 Z")';
+  'path("M 334 0 c 45.255 0 67.882 0 81.941 14.059 c 14.059 14.059 14.059 36.686 14.059 81.941 L 430 836 c 0 45.255 0 67.882 -14.059 81.941 c -14.059 14.059 -36.686 14.059 -81.941 14.059 L 96 932 c -45.255 0 -67.882 0 -81.941 -14.059 c -14.059 -14.059 -14.059 -36.686 -14.059 -81.941 L 0 96 c 0 -45.255 0 -67.882 14.059 -81.941 c 14.059 -14.059 36.686 -14.059 81.941 -14.059 Z")';
 
 const FRAME_WIDTH = 430;
-const FRAME_HEIGHT = 1120;
+const FRAME_HEIGHT = 932;
 
 function DragHandleIcon() {
   return (
@@ -26,23 +26,14 @@ function DragHandleIcon() {
 
 export interface FrameProps {
   id: string;
-  /** Display label above the frame (e.g. screen name) */
   label: string;
-  /** Horizontal position in px (relative to canvas transform origin) */
   left: number;
-  /** Vertical position in px (default: -500) */
   top?: number;
-  /** Whether this frame is selected */
   selected?: boolean;
-  /** Called when frame is clicked. (id, metaKey): if metaKey toggle in selection, else set selection to [id]. */
   onSelect?: (id: string, metaKey: boolean) => void;
-  /** Show toolbar (only when single selection). Defaults to selected */
   showToolbar?: boolean;
-  /** Canvas scale for toolbar sizing */
   canvasScale?: number;
-  /** Called when frame is dragged to a new position (canvas coordinates) */
   onPositionChange?: (newLeft: number, newTop: number) => void;
-  /** Optional content to render inside the phone screen. Defaults to a placeholder. */
   children?: React.ReactNode;
 }
 
@@ -104,12 +95,14 @@ export function Frame({
 
   return (
     <div
-      className={`absolute ${isDragging ? "cursor-grabbing" : ""}`}
+      className={`absolute shrink-0 ${isDragging ? "cursor-grabbing" : ""}`}
       style={{
         left: `${left}px`,
         top: `${top}px`,
         width: FRAME_WIDTH,
         height: FRAME_HEIGHT,
+        minWidth: FRAME_WIDTH,
+        minHeight: FRAME_HEIGHT,
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}

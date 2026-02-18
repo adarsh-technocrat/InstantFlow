@@ -9,7 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@ai-sdk/google-vertex": "^4.0.59",
     "@reduxjs/toolkit": "^2.11.2",
+    "ai": "^6.0.90",
     "clsx": "^2.1.1",
     "lucide-react": "^0.574.0",
     "next": "16.1.6",

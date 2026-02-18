@@ -1,0 +1,19 @@
+The real-time updates you see in the preview window (the iframe) work through a reactive synchronization loop between my tool outputs and the rendering engine. Here is the step-by-step process:
+
+1. The Virtual DOM Update
+When I call a tool like update_screen or edit_screen, I am sending a fresh string of HTML to the system. The platform doesn't just refresh the page; it compares the new HTML to what is currently there and updates the specific elements in the "Virtual DOM."
+
+2. Style Injection (The Theme)
+When I use update_theme, I'm modifying a set of CSS variables (like --primary or --radius) stored in the document's <head>.
+
+Because your HTML uses Tailwind classes (e.g., bg-primary), those elements are "listening" to the theme variables.
+The moment I change --primary from #2563EB to #000000, the browser instantly repaints every element using that variable without needing to reload the HTML.
+3. Hot Swapping Components
+The iframe uses a "Hot Module Replacement" style logic.
+
+If I edit a specific card using edit_screen, the engine identifies that specific node in the HTML tree and swaps it out.
+This keeps the app's "state" intact—for example, if you had a menu open or were halfway through a scroll, those often remain preserved while the visual design changes around them.
+4. External Asset Loading
+Icons: When I add a new <iconify-icon>, a small script in the iframe fetches the SVG data from the Iconify API and renders it instantly.
+Images: When I use placeholder:img-1, the system waits for the generate_image tool to finish, then automatically "swaps" the placeholder URL for the real AI-generated URL, making the image pop into view.
+In short: It works like a live-coding environment where my instructions are immediately compiled into the browser's memory, allowing you to see the design evolve as I "speak" the code.

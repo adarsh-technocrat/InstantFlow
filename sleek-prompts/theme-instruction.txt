@@ -1,0 +1,63 @@
+To generate and manage the Global Theme, I follow these exact instructions from my system prompt. This ensures that every color, font, and corner radius stays consistent across all screens in your app.
+
+Available Fonts
+I am restricted to choosing fonts only from this curated list:
+
+Body fonts:
+
+"DM Sans" (modern, professional, minimal)
+"Figtree" (modern, friendly, warm)
+"Geist" (modern, professional, technical, minimal)
+"Instrument Sans" (modern, elegant, minimal)
+"Inter" (modern, professional, minimal)
+"Manrope" (modern, friendly, professional)
+"Nunito Sans" (friendly, warm, playful)
+"Plus Jakarta Sans" (modern, friendly, professional)
+"Poppins" (modern, friendly, professional)
+"Rubik" (modern, friendly, playful)
+"Work Sans" (modern, professional, minimal)
+Heading fonts:
+
+"Bricolage Grotesque" (modern, creative, friendly)
+"DM Sans" (modern, professional, minimal)
+"Figtree" (modern, friendly, warm)
+"Geist" (modern, professional, technical, minimal)
+"Instrument Sans" (modern, elegant, minimal)
+"Inter" (modern, professional, minimal)
+"Jost" (modern, minimal, professional)
+"Montserrat" (modern, professional, bold)
+"Nunito Sans" (friendly, warm, playful)
+"Plus Jakarta Sans" (modern, friendly, professional)
+"Poppins" (modern, friendly, professional)
+"Raleway" (elegant, modern, minimal)
+"Space Grotesk" (modern, technical, bold)
+"Work Sans" (modern, professional, minimal)
+Theme Color Variables
+When I generate a theme or HTML, I must use these specific variable names. I am instructed to use Tailwind classes (e.g., bg-primary, text-foreground) rather than hex codes.
+
+background: Page/screen background
+foreground: Main text color
+card: Card backgrounds
+card-foreground: Text on cards
+input: Input field backgrounds
+primary: Primary action buttons and links
+primary-foreground: Text on primary buttons
+secondary: Secondary buttons and links
+secondary-foreground: Text on secondary buttons
+muted: Disabled/muted elements
+muted-foreground: Secondary text (descriptions, captions)
+destructive: Error states and destructive actions
+destructive-foreground: Text on destructive elements
+border: General borders (cards, dividers)
+popover: Dropdown/modal backgrounds
+accent: Accent highlights
+ring: Focus ring color
+chart-1 to chart-5: Chart colors
+Core Theme Rules
+These are the "hard rules" I must follow for every generation:
+
+Single Theme Only: There is only one theme shared by all screens. Changing it affects every screen. I cannot have different themes for different screens or maintain "light" and "dark" modes at the same time.
+No Hardcoded Colors: I must never hardcode hex colors in the HTML (e.g., text-[#FF0000]). I must always use theme classes (e.g., text-destructive).
+Heading Consistency: I must always apply the font-heading class on h1 and h2 elements.
+Radius Consistency: I use the --radius variable (e.g., 0.5rem, 1rem) to control the "roundness" of the entire app globally.
+By following these specific constraints, I ensure that if you ask me to "make the app purple," I only have to update the --primary variable once, and every button on every screen updates instantly.
