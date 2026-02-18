@@ -34,6 +34,7 @@ export interface FrameProps {
   showToolbar?: boolean;
   canvasScale?: number;
   onPositionChange?: (newLeft: number, newTop: number) => void;
+  spaceHeld?: boolean;
   children?: React.ReactNode;
 }
 
@@ -47,6 +48,7 @@ export function Frame({
   showToolbar: showToolbarProp = undefined,
   canvasScale = 0.556382,
   onPositionChange,
+  spaceHeld = false,
   children,
 }: FrameProps) {
   const [isHovered, setIsHovered] = useState(false);
@@ -63,13 +65,14 @@ export function Frame({
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0) return;
+      if (spaceHeld) return;
       e.stopPropagation();
       onSelect?.(id, e.metaKey);
       dragStart.current = { clientX: e.clientX, clientY: e.clientY, left, top };
       setIsDragging(true);
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     },
-    [onSelect, id, left, top],
+    [onSelect, id, left, top, spaceHeld],
   );
 
   const handlePointerMove = useCallback(

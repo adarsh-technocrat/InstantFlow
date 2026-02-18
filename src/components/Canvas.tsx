@@ -311,6 +311,7 @@ export function Canvas() {
             onPositionChange={(newLeft, newTop) =>
               updateFrame(frame.id, { left: newLeft, top: newTop })
             }
+            spaceHeld={spaceHeld}
           >
             <FramePreview html={HEALTHSYNC_HOME_HTML} />
           </Frame>
