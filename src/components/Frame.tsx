@@ -120,9 +120,9 @@ export function Frame({
         />
       )}
 
-      <div className="absolute isolate size-full filter-[drop-shadow(0_0_2px_rgb(212_212_216))] dark:filter-[drop-shadow(0_0_2px_rgb(113_113_122))]">
+      <div className="absolute isolate size-full will-change-transform filter-[drop-shadow(0_0_2px_rgb(212_212_216))] dark:filter-[drop-shadow(0_0_2px_rgb(113_113_122))]">
         <div
-          className="absolute inset-0 overflow-hidden"
+          className="absolute inset-0 overflow-hidden will-change-transform"
           style={{
             backgroundColor: "#0d0807",
             transform: "translateZ(0px)",

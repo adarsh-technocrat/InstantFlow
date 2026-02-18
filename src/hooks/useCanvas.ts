@@ -31,23 +31,23 @@ export function useCanvas() {
     (state) => state.canvas,
   );
 
-  const setTransformAction = useCallback(
+  const updateCanvasTransform = useCallback(
     (payload: Partial<CanvasTransform>) => dispatch(setTransform(payload)),
     [dispatch],
   );
 
-  const setZoomAction = useCallback(
+  const setCanvasZoomScale = useCallback(
     (scale: number) => dispatch(setZoom(scale)),
     [dispatch],
   );
 
-  const zoomIn = useCallback(() => {
+  const increaseCanvasZoom = useCallback(() => {
     dispatch(
       setZoom(Math.min(CANVAS_ZOOM.MAX, transform.scale + CANVAS_ZOOM.STEP)),
     );
   }, [dispatch, transform.scale]);
 
-  const zoomOut = useCallback(() => {
+  const decreaseCanvasZoom = useCallback(() => {
     dispatch(
       setZoom(Math.max(CANVAS_ZOOM.MIN, transform.scale - CANVAS_ZOOM.STEP)),
     );
@@ -59,7 +59,7 @@ export function useCanvas() {
    * @param containerY - cursor Y relative to canvas container
    * @param deltaY - wheel event deltaY (positive = zoom out, negative = zoom in)
    */
-  const zoomAtPoint = useCallback(
+  const zoomCanvasAtCursorPosition = useCallback(
     (containerX: number, containerY: number, deltaY: number) => {
       const { x, y, scale } = transform;
       const factor = 1 - deltaY * CANVAS_ZOOM.WHEEL_SENSITIVITY;
@@ -80,33 +80,33 @@ export function useCanvas() {
     [dispatch, transform],
   );
 
-  const addFrameAction = useCallback(
+  const addNewFrameToCanvas = useCallback(
     (payload: Omit<FrameState, "id">) => dispatch(addFrame(payload)),
     [dispatch],
   );
 
-  const updateFrameAction = useCallback(
+  const updateFrameProperties = useCallback(
     (id: string, changes: Partial<FrameState>) =>
       dispatch(updateFrame({ id, changes })),
     [dispatch],
   );
 
-  const removeFrameAction = useCallback(
+  const removeFrameFromCanvas = useCallback(
     (id: string) => dispatch(removeFrame(id)),
     [dispatch],
   );
 
-  const reorderFramesAction = useCallback(
+  const reorderCanvasFrames = useCallback(
     (order: string[]) => dispatch(reorderFrames(order)),
     [dispatch],
   );
 
-  const setSelectedFramesAction = useCallback(
+  const setSelectedFrameIds = useCallback(
     (ids: string[]) => dispatch(setSelectedFrames(ids)),
     [dispatch],
   );
 
-  const toggleFrameInSelectionAction = useCallback(
+  const toggleFrameSelectionState = useCallback(
     (id: string) => dispatch(toggleFrameInSelection(id)),
     [dispatch],
   );
@@ -121,24 +121,24 @@ export function useCanvas() {
     zoomPercent,
 
     // Selection
-    setSelectedFrames: setSelectedFramesAction,
-    toggleFrameInSelection: toggleFrameInSelectionAction,
+    setSelectedFrameIds,
+    toggleFrameSelectionState,
 
     // Transform
-    setTransform: setTransformAction,
-    setZoom: setZoomAction,
-    zoomIn,
-    zoomOut,
-    zoomAtPoint,
+    updateCanvasTransform,
+    setCanvasZoomScale,
+    increaseCanvasZoom,
+    decreaseCanvasZoom,
+    zoomCanvasAtCursorPosition,
 
     // Frames
-    addFrame: addFrameAction,
-    updateFrame: updateFrameAction,
-    removeFrame: removeFrameAction,
-    duplicateFrame: useCallback(
+    addNewFrameToCanvas,
+    updateFrameProperties,
+    removeFrameFromCanvas,
+    duplicateFrameById: useCallback(
       (id: string) => dispatch(duplicateFrame(id)),
       [dispatch],
     ),
-    reorderFrames: reorderFramesAction,
+    reorderCanvasFrames,
   };
 }

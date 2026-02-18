@@ -1,8 +1,3 @@
-/**
- * HealthSync app - Home screen HTML template.
- * Rendered in frame iframes. Updates here trigger Hot Module Replacement
- * and the frame preview re-renders with the new content.
- */
 export const HEALTHSYNC_HOME_HTML = `<!DOCTYPE html>
 <html lang="en">
   <head>

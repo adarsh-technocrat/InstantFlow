@@ -7,59 +7,25 @@ import { Frame } from "@/components/Frame";
 import { FramePreview } from "@/components/FramePreview";
 import { HEALTHSYNC_HOME_HTML } from "@/constants/frame-templates";
 import { useCanvas } from "@/hooks/useCanvas";
-
-const FRAME_WIDTH = 430;
-const FRAME_HEIGHT = 932;
-
-function clientToContent(
-  clientX: number,
-  clientY: number,
-  containerRect: DOMRect,
-  tx: number,
-  ty: number,
-  scale: number,
-) {
-  return {
-    x: (clientX - containerRect.left - tx) / scale,
-    y: (clientY - containerRect.top - ty) / scale,
-  };
-}
-
-function framesInRect(
-  frames: { id: string; left: number; top: number }[],
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-) {
-  const left = Math.min(x1, x2);
-  const right = Math.max(x1, x2);
-  const top = Math.min(y1, y2);
-  const bottom = Math.max(y1, y2);
-  return frames.filter((f) => {
-    const fRight = f.left + FRAME_WIDTH;
-    const fBottom = f.top + FRAME_HEIGHT;
-    return !(
-      right < f.left ||
-      left > fRight ||
-      bottom < f.top ||
-      top > fBottom
-    );
-  });
-}
+import {
+  convertClientPointToContentPoint,
+  getFramesIntersectingRectangle,
+  FRAME_WIDTH,
+  FRAME_HEIGHT,
+} from "@/lib/canvas-utils";
 
 export function Canvas() {
   const {
     transform,
     frames,
     selectedFrameIds,
-    setTransform,
-    setSelectedFrames,
-    toggleFrameInSelection,
-    updateFrame,
-    removeFrame,
-    duplicateFrame,
-    zoomAtPoint,
+    updateCanvasTransform,
+    setSelectedFrameIds,
+    toggleFrameSelectionState,
+    updateFrameProperties,
+    removeFrameFromCanvas,
+    duplicateFrameById,
+    zoomCanvasAtCursorPosition,
   } = useCanvas();
 
   const panStart = useRef<{
@@ -77,6 +43,8 @@ export function Canvas() {
   const [isPanning, setIsPanning] = useState(false);
   const [isMarquee, setIsMarquee] = useState(false);
   const [spaceHeld, setSpaceHeld] = useState(false);
+  const [isZooming, setIsZooming] = useState(false);
+  const zoomEndTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [marqueeEnd, setMarqueeEnd] = useState<{ x: number; y: number } | null>(
     null,
   );
@@ -109,7 +77,14 @@ export function Canvas() {
       const el = containerRef.current;
       if (!el) return null;
       const rect = el.getBoundingClientRect();
-      return clientToContent(e.clientX, e.clientY, rect, x, y, scale);
+      return convertClientPointToContentPoint(
+        e.clientX,
+        e.clientY,
+        rect,
+        x,
+        y,
+        scale,
+      );
     },
     [x, y, scale],
   );
@@ -120,10 +95,17 @@ export function Canvas() {
       const el = containerRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      const content = clientToContent(e.clientX, e.clientY, rect, x, y, scale);
+      const content = convertClientPointToContentPoint(
+        e.clientX,
+        e.clientY,
+        rect,
+        x,
+        y,
+        scale,
+      );
 
       if (spaceHeld) {
-        setSelectedFrames([]);
+        setSelectedFrameIds([]);
         panStart.current = {
           x: e.clientX,
           y: e.clientY,
@@ -139,7 +121,7 @@ export function Canvas() {
         (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
       }
     },
-    [transform.x, transform.y, x, y, scale, setSelectedFrames, spaceHeld],
+    [transform.x, transform.y, x, y, scale, setSelectedFrameIds, spaceHeld],
   );
 
   const handlePointerMove = useCallback(
@@ -147,7 +129,7 @@ export function Canvas() {
       if (panStart.current) {
         const dx = e.clientX - panStart.current.x;
         const dy = e.clientY - panStart.current.y;
-        setTransform({
+        updateCanvasTransform({
           x: panStart.current.tx + dx,
           y: panStart.current.ty + dy,
         });
@@ -158,21 +140,23 @@ export function Canvas() {
         if (content) setMarqueeEnd({ x: content.x, y: content.y });
       }
     },
-    [setTransform, getContentCoords],
+    [updateCanvasTransform, getContentCoords],
   );
 
   const handlePointerUp = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0) return;
       if (marqueeStart.current && marqueeEnd) {
-        const ids = framesInRect(
+        const ids = getFramesIntersectingRectangle(
           frames,
           marqueeStart.current.contentX,
           marqueeStart.current.contentY,
           marqueeEnd.x,
           marqueeEnd.y,
+          FRAME_WIDTH,
+          FRAME_HEIGHT,
         ).map((f) => f.id);
-        setSelectedFrames(ids);
+        setSelectedFrameIds(ids);
         marqueeStart.current = null;
         setMarqueeEnd(null);
         setIsMarquee(false);
@@ -181,18 +165,18 @@ export function Canvas() {
       setIsPanning(false);
       (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
     },
-    [frames, marqueeEnd, setSelectedFrames],
+    [frames, marqueeEnd, setSelectedFrameIds],
   );
 
   const handleFrameSelect = useCallback(
     (id: string, metaKey: boolean) => {
       if (metaKey) {
-        toggleFrameInSelection(id);
+        toggleFrameSelectionState(id);
       } else {
-        setSelectedFrames([id]);
+        setSelectedFrameIds([id]);
       }
     },
-    [setSelectedFrames, toggleFrameInSelection],
+    [setSelectedFrameIds, toggleFrameSelectionState],
   );
 
   useEffect(() => {
@@ -207,10 +191,10 @@ export function Canvas() {
           <SelectionToast
             message={label}
             onCopy={() => {
-              if (selectedFrameIds[0]) duplicateFrame(selectedFrameIds[0]);
+              if (selectedFrameIds[0]) duplicateFrameById(selectedFrameIds[0]);
             }}
             onDelete={() => {
-              selectedFrameIds.forEach((id) => removeFrame(id));
+              selectedFrameIds.forEach((id) => removeFrameFromCanvas(id));
               toast.dismiss("selection");
             }}
           />
@@ -223,7 +207,22 @@ export function Canvas() {
         },
       );
     }
-  }, [selectedFrameIds, duplicateFrame, removeFrame]);
+  }, [selectedFrameIds, duplicateFrameById, removeFrameFromCanvas]);
+
+  const zoomPendingRef = useRef<{
+    containerX: number;
+    containerY: number;
+    deltaY: number;
+  } | null>(null);
+  const zoomRafRef = useRef<number | null>(null);
+
+  const flushZoom = useCallback(() => {
+    const p = zoomPendingRef.current;
+    if (!p) return;
+    zoomPendingRef.current = null;
+    zoomRafRef.current = null;
+    zoomCanvasAtCursorPosition(p.containerX, p.containerY, p.deltaY);
+  }, [zoomCanvasAtCursorPosition]);
 
   const handleWheel = useCallback(
     (e: WheelEvent) => {
@@ -235,15 +234,29 @@ export function Canvas() {
       const containerY = e.clientY - rect.top;
       const isZoom = e.ctrlKey || e.metaKey;
       if (isZoom) {
-        zoomAtPoint(containerX, containerY, e.deltaY);
+        setIsZooming(true);
+        if (zoomEndTimeoutRef.current) clearTimeout(zoomEndTimeoutRef.current);
+        zoomEndTimeoutRef.current = setTimeout(() => {
+          zoomEndTimeoutRef.current = null;
+          setIsZooming(false);
+        }, 150);
+        const prev = zoomPendingRef.current;
+        zoomPendingRef.current = {
+          containerX,
+          containerY,
+          deltaY: (prev?.deltaY ?? 0) + e.deltaY,
+        };
+        if (zoomRafRef.current === null) {
+          zoomRafRef.current = requestAnimationFrame(flushZoom);
+        }
       } else {
-        setTransform({
+        updateCanvasTransform({
           x: x - e.deltaX,
           y: y - e.deltaY,
         });
       }
     },
-    [zoomAtPoint, setTransform, x, y],
+    [zoomCanvasAtCursorPosition, updateCanvasTransform, x, y, scale, flushZoom],
   );
 
   useEffect(() => {
@@ -252,6 +265,13 @@ export function Canvas() {
     el.addEventListener("wheel", handleWheel, { passive: false });
     return () => el.removeEventListener("wheel", handleWheel);
   }, [handleWheel]);
+
+  useEffect(
+    () => () => {
+      if (zoomEndTimeoutRef.current) clearTimeout(zoomEndTimeoutRef.current);
+    },
+    [],
+  );
 
   return (
     <div
@@ -278,7 +298,7 @@ export function Canvas() {
       aria-label="Canvas"
     >
       <div
-        className={`absolute origin-top-left ${!isPanning ? "transition-transform duration-150 ease-out" : ""}`}
+        className={`absolute origin-top-left will-change-transform ${!isPanning && !isZooming ? "transition-transform duration-150 ease-out" : ""}`}
         style={{
           transform: `translate(${x}px, ${y}px) scale(${scale})`,
         }}
@@ -309,7 +329,7 @@ export function Canvas() {
             }
             canvasScale={scale}
             onPositionChange={(newLeft, newTop) =>
-              updateFrame(frame.id, { left: newLeft, top: newTop })
+              updateFrameProperties(frame.id, { left: newLeft, top: newTop })
             }
             spaceHeld={spaceHeld}
           >

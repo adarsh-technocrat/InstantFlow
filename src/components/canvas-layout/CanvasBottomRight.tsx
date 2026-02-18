@@ -1,8 +1,44 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { useCanvas } from "@/hooks/useCanvas";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setCanvasToolMode, type CanvasToolMode } from "@/store/slices/uiSlice";
+
+const ZOOM_DISPLAY_THROTTLE_MS = 80;
+
+function useThrottledZoomPercent(zoomPercent: number) {
+  const [display, setDisplay] = useState(zoomPercent);
+  const lastTimeRef = useRef(0);
+  const latestRef = useRef(zoomPercent);
+  const pendingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  latestRef.current = zoomPercent;
+  useEffect(() => {
+    const now = Date.now();
+    const elapsed = now - lastTimeRef.current;
+    if (elapsed >= ZOOM_DISPLAY_THROTTLE_MS || lastTimeRef.current === 0) {
+      lastTimeRef.current = now;
+      setDisplay(zoomPercent);
+      if (pendingRef.current) {
+        clearTimeout(pendingRef.current);
+        pendingRef.current = null;
+      }
+    } else if (!pendingRef.current) {
+      pendingRef.current = setTimeout(() => {
+        pendingRef.current = null;
+        lastTimeRef.current = Date.now();
+        setDisplay(latestRef.current);
+      }, ZOOM_DISPLAY_THROTTLE_MS - elapsed);
+    }
+    return () => {
+      if (pendingRef.current) {
+        clearTimeout(pendingRef.current);
+        pendingRef.current = null;
+      }
+    };
+  }, [zoomPercent]);
+  return display;
+}
 
 function ToolbarButton({
   children,
@@ -39,7 +75,8 @@ function ToolbarButton({
 }
 
 export function CanvasBottomRight() {
-  const { zoomPercent, zoomIn, zoomOut } = useCanvas();
+  const { zoomPercent, increaseCanvasZoom, decreaseCanvasZoom } = useCanvas();
+  const displayPercent = useThrottledZoomPercent(zoomPercent);
   const dispatch = useAppDispatch();
   const canvasToolMode = useAppSelector((s) => s.ui.canvasToolMode);
 
@@ -104,7 +141,7 @@ export function CanvasBottomRight() {
       </div>
       <div className="h-4 w-px shrink-0 bg-white/20" role="none" />
       <div className="flex items-center">
-        <ToolbarButton title="Zoom out" onClick={zoomOut}>
+        <ToolbarButton title="Zoom out" onClick={decreaseCanvasZoom}>
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="1em"
@@ -116,9 +153,9 @@ export function CanvasBottomRight() {
           </svg>
         </ToolbarButton>
         <div className="min-w-10 text-center text-sm text-white/90">
-          {zoomPercent}%
+          {displayPercent}%
         </div>
-        <ToolbarButton title="Zoom in" onClick={zoomIn}>
+        <ToolbarButton title="Zoom in" onClick={increaseCanvasZoom}>
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="1em"
