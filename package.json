@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@ai-sdk/google-vertex": "^4.0.59",
+    "@ai-sdk/react": "^3.0.93",
     "@reduxjs/toolkit": "^2.11.2",
     "ai": "^6.0.90",
     "clsx": "^2.1.1",

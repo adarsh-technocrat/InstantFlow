@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { SelectionToast } from "@/components/custom-toast/selection-toast";
 import { Frame } from "@/components/Frame";
 import { FramePreview } from "@/components/FramePreview";
-import { HEALTHSYNC_HOME_HTML } from "@/constants/frame-templates";
 import { useCanvas } from "@/hooks/useCanvas";
 import {
   convertClientPointToContentPoint,
@@ -52,15 +51,22 @@ export function Canvas() {
   const { x, y, scale } = transform;
 
   useEffect(() => {
+    const isEditableElement = (el: EventTarget | null) => {
+      if (!el || !(el instanceof HTMLElement)) return false;
+      const tag = el.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea") return true;
+      return el.isContentEditable ?? false;
+    };
+
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "Space") {
+      if (e.code === "Space" && !isEditableElement(e.target)) {
         e.preventDefault();
         setSpaceHeld(true);
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === "Space") {
-        e.preventDefault();
+        if (!isEditableElement(e.target)) e.preventDefault();
         setSpaceHeld(false);
       }
     };
@@ -333,7 +339,7 @@ export function Canvas() {
             }
             spaceHeld={spaceHeld}
           >
-            <FramePreview html={HEALTHSYNC_HOME_HTML} />
+            <FramePreview html={frame.html} />
           </Frame>
         ))}
       </div>

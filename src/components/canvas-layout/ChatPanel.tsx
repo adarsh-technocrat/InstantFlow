@@ -1,14 +1,28 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAppSelector } from "@/store/hooks";
+import { useChat } from "@ai-sdk/react";
+import {
+  DefaultChatTransport,
+  lastAssistantMessageIsCompleteWithToolCalls,
+  type UIMessage,
+} from "ai";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  addFrame,
+  updateFrameHtml,
+  setTheme,
+  replaceTheme,
+} from "@/store/slices/canvasSlice";
 import { CloseIcon } from "./icons";
+import { wrapScreenBody } from "@/lib/screen-utils";
 
 const MIN_PANEL_WIDTH = 360;
 const MAX_PANEL_WIDTH = 600;
 const DEFAULT_PANEL_WIDTH = 432;
 const RAIL_OFFSET = 70;
 const RIGHT_MARGIN = 16;
+const FRAME_SPACING = 420;
 
 interface ChatPanelProps {
   isVisible: boolean;
@@ -16,21 +30,227 @@ interface ChatPanelProps {
   frameName?: string;
 }
 
+function extractBodyContent(fullHtml: string): string {
+  if (!fullHtml) return "";
+  const bodyMatch = fullHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  if (bodyMatch) return bodyMatch[1].trim();
+  return fullHtml;
+}
+
 export function ChatPanel({
   isVisible,
   onClose,
   frameName = "Screen",
 }: ChatPanelProps) {
+  const dispatch = useAppDispatch();
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const chatThreadRef = useRef<HTMLDivElement>(null);
   const selectedFrameIds = useAppSelector((s) => s.canvas.selectedFrameIds);
   const frames = useAppSelector((s) => s.canvas.frames);
+  const theme = useAppSelector((s) => s.canvas.theme);
   const activeFrameLabel =
     selectedFrameIds.length === 1
       ? (frames.find((f) => f.id === selectedFrameIds[0])?.label ?? frameName)
       : frameName;
+
+  const handleToolCall = useCallback(
+    (
+      toolName: string,
+      args: unknown,
+      addToolOutput: (params: {
+        tool: string;
+        toolCallId: string;
+        output: unknown;
+      }) => void,
+      toolCallId: string,
+    ) => {
+      try {
+        switch (toolName) {
+          case "read_screen": {
+            const { id } = args as { id: string };
+            const frame = frames.find((f) => f.id === id);
+            const html = frame?.html ? extractBodyContent(frame.html) : "";
+            addToolOutput({
+              tool: "read_screen",
+              toolCallId,
+              output: html || "(empty screen)",
+            });
+            break;
+          }
+          case "read_theme": {
+            addToolOutput({
+              tool: "read_theme",
+              toolCallId,
+              output: JSON.stringify(theme, null, 2),
+            });
+            break;
+          }
+          case "create_screen": {
+            const { name, screen_html } = args as {
+              name: string;
+              screen_html: string;
+            };
+            const lastFrame = frames[frames.length - 1];
+            const left = lastFrame ? lastFrame.left + FRAME_SPACING : 0;
+            const top = lastFrame ? lastFrame.top : 0;
+            const fullHtml = wrapScreenBody(screen_html, theme);
+            dispatch(
+              addFrame({
+                label: name,
+                left,
+                top,
+                html: fullHtml,
+              }),
+            );
+            addToolOutput({
+              tool: "create_screen",
+              toolCallId,
+              output: { success: true, message: `Created screen "${name}"` },
+            });
+            break;
+          }
+          case "update_screen": {
+            const { id, screen_html } = args as {
+              id: string;
+              screen_html: string;
+            };
+            const fullHtml = wrapScreenBody(screen_html, theme);
+            dispatch(updateFrameHtml({ id, html: fullHtml }));
+            addToolOutput({
+              tool: "update_screen",
+              toolCallId,
+              output: { success: true },
+            });
+            break;
+          }
+          case "edit_screen": {
+            const { id, find, replace } = args as {
+              id: string;
+              find: string;
+              replace: string;
+            };
+            const frame = frames.find((f) => f.id === id);
+            if (!frame?.html) {
+              addToolOutput({
+                tool: "edit_screen",
+                toolCallId,
+                output: { success: false, error: "Screen not found" },
+              });
+              return;
+            }
+            if (!frame.html.includes(find)) {
+              addToolOutput({
+                tool: "edit_screen",
+                toolCallId,
+                output: {
+                  success: false,
+                  error:
+                    "Find string not found - ensure exact match from read_screen",
+                },
+              });
+              return;
+            }
+            const newHtml = frame.html.replace(find, replace);
+            dispatch(updateFrameHtml({ id, html: newHtml }));
+            addToolOutput({
+              tool: "edit_screen",
+              toolCallId,
+              output: { success: true },
+            });
+            break;
+          }
+          case "update_theme": {
+            const { updates } = args as { updates: Record<string, string> };
+            dispatch(setTheme(updates));
+            addToolOutput({
+              tool: "update_theme",
+              toolCallId,
+              output: { success: true },
+            });
+            break;
+          }
+          case "build_theme": {
+            const { theme_vars } = args as {
+              description: string;
+              theme_vars: Record<string, string>;
+            };
+            dispatch(replaceTheme(theme_vars));
+            addToolOutput({
+              tool: "build_theme",
+              toolCallId,
+              output: {
+                success: true,
+                message: "Theme built from user prompt",
+              },
+            });
+            break;
+          }
+          default:
+            addToolOutput({
+              tool: toolName,
+              toolCallId,
+              output: { error: `Unknown tool: ${toolName}` },
+            });
+        }
+      } catch (err) {
+        addToolOutput({
+          tool: toolName,
+          toolCallId,
+          output: {
+            error: err instanceof Error ? err.message : "Tool execution failed",
+          },
+        });
+      }
+    },
+    [dispatch, frames, theme],
+  );
+
+  const stateRef = useRef({ frames, theme });
+  stateRef.current = { frames, theme };
+
+  const transportRef = useRef<DefaultChatTransport<UIMessage> | null>(null);
+  if (!transportRef.current) {
+    transportRef.current = new DefaultChatTransport({
+      api: "/api/chat",
+      prepareSendMessagesRequest: (options) => ({
+        body: {
+          ...options.body,
+          messages: options.messages,
+          id: options.id,
+          trigger: options.trigger,
+          messageId: options.messageId,
+          frames: stateRef.current.frames,
+          theme: stateRef.current.theme,
+        },
+      }),
+    });
+  }
+  const transport = transportRef.current;
+
+  const { messages, sendMessage, addToolOutput, status } = useChat({
+    transport,
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    onToolCall({
+      toolCall,
+    }: {
+      toolCall: {
+        dynamic?: boolean;
+        toolName: string;
+        input: unknown;
+        toolCallId: string;
+      };
+    }) {
+      if (toolCall.dynamic) return;
+      handleToolCall(
+        toolCall.toolName,
+        toolCall.input,
+        (params) => addToolOutput(params),
+        toolCall.toolCallId,
+      );
+    },
+  });
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -68,18 +288,22 @@ export function ChatPanel({
     };
   }, [isResizing, handleMouseMove, handleMouseUp]);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleSend = useCallback(
+    (e?: React.FormEvent) => {
+      e?.preventDefault();
+      if (!inputValue.trim()) return;
+      sendMessage({ text: inputValue.trim() });
+      setInputValue("");
+    },
+    [inputValue, sendMessage],
+  );
 
-  const handleSend = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!inputValue.trim()) return;
-    // Placeholder: could push to messages state or call onSend
-    setInputValue("");
-  };
-
-  const handleAttachmentClick = () => {
-    fileInputRef.current?.click();
-  };
+  useEffect(() => {
+    chatThreadRef.current?.scrollTo({
+      top: chatThreadRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages]);
 
   if (!isVisible) return null;
 
@@ -92,7 +316,6 @@ export function ChatPanel({
         backgroundColor: "#0d0807",
       }}
     >
-      {/* Resize handle */}
       <div
         className="absolute -left-2 top-0 z-10 flex h-full w-4 cursor-ew-resize items-center justify-center"
         onMouseDown={handleMouseDown}
@@ -101,96 +324,117 @@ export function ChatPanel({
         <div className="h-full w-0.5 rounded-full bg-border opacity-0 hover:opacity-100" />
       </div>
 
-      {/* Header */}
       <div className="flex flex-row items-center justify-between p-2 pl-3">
         <h2 className="text-sm font-medium leading-[150%] text-foreground">
           Edit{" "}
-          {activeFrameLabel.length > 20
-            ? `${activeFrameLabel.slice(0, 20)}…`
+          {activeFrameLabel.length > 15
+            ? `${activeFrameLabel.slice(0, 15)}…`
             : activeFrameLabel}
         </h2>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close panel"
-          className="inline-flex h-8 min-h-8 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground px-2 py-1.5 shadow-xs transition-colors hover:bg-secondary/80"
+          className="inline-flex w-8 h-8 min-h-8 shrink-0 cursor-pointer items-center justify-center rounded-md bg-secondary/40 text-secondary-foreground/30 px-2 py-1.5 shadow-xs transition-colors hover:bg-secondary/60"
         >
-          <CloseIcon className="h-4 w-4" />
+          <CloseIcon className="h-3 w-3" />
         </button>
       </div>
 
-      {/* Messages area */}
       <div
         ref={chatThreadRef}
         id="chat-thread-area"
         className="min-h-0 flex-1 space-y-4 overflow-y-auto p-2"
       >
-        <div className="rounded-lg bg-accent/50 px-3 py-2 text-sm text-muted-foreground">
-          Describe what you want to create. Messages will appear here.
-        </div>
+        {messages.map(
+          (msg: {
+            id: string;
+            role: string;
+            parts?: Array<{ type: string; text?: string; state?: string }>;
+            content?: string;
+          }) => (
+            <div
+              key={msg.id}
+              className={`flex w-full ${
+                msg.role === "user" ? "justify-end" : "justify-start"
+              }`}
+            >
+              <div
+                className={`w-fit max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                  msg.role === "user"
+                    ? "text-white"
+                    : msg.role === "assistant"
+                      ? "bg-muted/50 text-stone-300"
+                      : "bg-muted/30"
+                }`}
+                style={
+                  msg.role === "user"
+                    ? { backgroundColor: "#2e2726" }
+                    : undefined
+                }
+              >
+                {msg.parts?.map(
+                  (
+                    part: { type: string; text?: string; state?: string },
+                    i: number,
+                  ) => {
+                    if (part.type === "text") {
+                      return (
+                        <p key={i} className="whitespace-pre-wrap">
+                          {part.text}
+                        </p>
+                      );
+                    }
+                    if (part.type.startsWith("tool-")) {
+                      const name = part.type.replace("tool-", "");
+                      return (
+                        <div key={i} className="mt-2 text-xs text-stone-400">
+                          {name}:{" "}
+                          {part.state === "output-available" ? "✓" : "..."}
+                        </div>
+                      );
+                    }
+                    return null;
+                  },
+                ) ?? (typeof msg.content === "string" ? msg.content : null)}
+              </div>
+            </div>
+          ),
+        )}
+        {status === "streaming" && (
+          <div className="flex w-full justify-start">
+            <div className="w-fit max-w-[85%] rounded-lg bg-muted/50 px-3 py-2 text-sm text-stone-300">
+              Thinking…
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Input area */}
       <div className="w-full p-4">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/png, image/jpeg, image/jpg, image/webp"
-          multiple
-          className="hidden"
-        />
         <form
           onSubmit={handleSend}
           className="w-full overflow-hidden rounded-xl border border-border/60 shadow-none focus-within:ring-2 focus-within:ring-ring/30"
           style={{ backgroundColor: "#2e2726" }}
         >
-          <div className="flex flex-col">
-            <div
-              aria-live="polite"
-              className="overflow-hidden transition-[height] duration-200 ease-out"
-              style={{ height: 0 }}
-            >
-              <div className="flex flex-wrap items-end gap-2 px-3 pt-3" />
-            </div>
-            <textarea
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              name="prompt"
-              placeholder="What changes do you want to make?"
-              className="w-full max-h-32 min-h-12 resize-none rounded-none border-none bg-transparent p-4 text-sm text-white/90 shadow-none outline-none ring-0 placeholder:text-zinc-400 focus-visible:ring-0 md:max-h-48 md:min-h-16"
-              style={{ fieldSizing: "content" } as React.CSSProperties}
-            />
-          </div>
-          <div className="flex items-center justify-between p-2">
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={handleAttachmentClick}
-                aria-label="Attach image"
-                className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-white/70 outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-95"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="1em"
-                  height="1em"
-                  fill="currentColor"
-                  viewBox="0 0 256 256"
-                  className="size-4"
-                >
-                  <path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,16V158.75l-26.07-26.06a16,16,0,0,0-22.63,0l-20,20-44-44a16,16,0,0,0-22.62,0L40,149.37V56ZM40,172l52-52,80,80H40Zm176,28H194.63l-36-36,20-20L216,181.38V200ZM144,100a12,12,0,1,1,12,12A12,12,0,0,1,144,100Z" />
-                </svg>
-              </button>
-            </div>
+          <textarea
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            name="prompt"
+            placeholder="Describe what you want to create or change…"
+            className="w-full max-h-32 min-h-12 resize-none rounded-none border-none bg-transparent p-4 text-sm text-white/90 shadow-none outline-none ring-0 placeholder:text-zinc-400 focus-visible:ring-0"
+            style={{ fieldSizing: "content" } as React.CSSProperties}
+          />
+          <div className="flex items-center justify-end p-2">
             <button
               type="submit"
-              disabled={!inputValue.trim()}
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-[#FF7F27] text-white shadow-xs outline-none transition-colors hover:bg-[#FF7F27]/90 disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-95"
+              disabled={!inputValue.trim() || status === "streaming"}
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-[#8A87F8] text-white shadow-xs outline-none transition-colors hover:bg-[#8A87F8]/90 disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-95"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"

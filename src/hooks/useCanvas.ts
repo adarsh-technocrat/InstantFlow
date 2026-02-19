@@ -11,6 +11,8 @@ import {
   removeFrame,
   duplicateFrame,
   reorderFrames,
+  updateFrameHtml,
+  setTheme,
   type CanvasTransform,
   type FrameState,
 } from "@/store/slices/canvasSlice";
@@ -27,7 +29,7 @@ export const CANVAS_ZOOM = {
 
 export function useCanvas() {
   const dispatch = useAppDispatch();
-  const { transform, frames, selectedFrameIds } = useAppSelector(
+  const { transform, frames, selectedFrameIds, theme } = useAppSelector(
     (state) => state.canvas,
   );
 
@@ -111,6 +113,16 @@ export function useCanvas() {
     [dispatch],
   );
 
+  const updateFrameHtmlContent = useCallback(
+    (id: string, html: string) => dispatch(updateFrameHtml({ id, html })),
+    [dispatch],
+  );
+
+  const updateCanvasTheme = useCallback(
+    (updates: Partial<Record<string, string>>) => dispatch(setTheme(updates)),
+    [dispatch],
+  );
+
   const zoomPercent = Math.round(transform.scale * 100);
 
   return {
@@ -118,6 +130,7 @@ export function useCanvas() {
     transform,
     frames,
     selectedFrameIds,
+    theme,
     zoomPercent,
 
     // Selection
@@ -140,5 +153,7 @@ export function useCanvas() {
       [dispatch],
     ),
     reorderCanvasFrames,
+    updateFrameHtmlContent,
+    updateCanvasTheme,
   };
 }

@@ -6,17 +6,22 @@ export interface CanvasTransform {
   scale: number;
 }
 
+export type ThemeVariables = Record<string, string>;
+
 export interface FrameState {
   id: string;
   label: string;
   left: number;
   top: number;
+  /** Full HTML document for the screen (head + body). Managed by agent. */
+  html: string;
 }
 
 interface CanvasState {
   transform: CanvasTransform;
   frames: FrameState[];
   selectedFrameIds: string[];
+  theme: ThemeVariables;
 }
 
 const initialState: CanvasState = {
@@ -26,12 +31,8 @@ const initialState: CanvasState = {
     y: 410.117,
     scale: 0.556382,
   },
-  frames: [
-    { id: "1", label: "Home", left: -210, top: -500 },
-    { id: "2", label: "Training Plans", left: 310, top: -500 },
-    { id: "3", label: "Progress", left: 830, top: -500 },
-    { id: "4", label: "Workout Detail", left: 1350, top: -500 },
-  ],
+  frames: [],
+  theme: {},
 };
 
 const canvasSlice = createSlice({
@@ -46,7 +47,14 @@ const canvasSlice = createSlice({
     },
     addFrame: (state, action: { payload: Omit<FrameState, "id"> }) => {
       const id = String(Date.now());
-      state.frames.push({ ...action.payload, id });
+      const payload = action.payload;
+      state.frames.push({
+        id,
+        label: payload.label,
+        left: payload.left,
+        top: payload.top,
+        html: payload.html ?? "",
+      });
     },
     updateFrame: (
       state,
@@ -72,6 +80,16 @@ const canvasSlice = createSlice({
         top: frame.top + 40,
       });
       state.selectedFrameIds = [newId];
+    },
+    updateFrameHtml: (state, action: { payload: { id: string; html: string } }) => {
+      const frame = state.frames.find((f) => f.id === action.payload.id);
+      if (frame) frame.html = action.payload.html;
+    },
+    setTheme: (state, action: { payload: Partial<ThemeVariables> }) => {
+      state.theme = { ...state.theme, ...action.payload };
+    },
+    replaceTheme: (state, action: { payload: ThemeVariables }) => {
+      state.theme = action.payload;
     },
     reorderFrames: (state, action: { payload: string[] }) => {
       const order = action.payload;
@@ -102,6 +120,9 @@ export const {
   reorderFrames,
   setSelectedFrames,
   toggleFrameInSelection,
+  updateFrameHtml,
+  setTheme,
+  replaceTheme,
 } = canvasSlice.actions;
 
 export default canvasSlice.reducer;
