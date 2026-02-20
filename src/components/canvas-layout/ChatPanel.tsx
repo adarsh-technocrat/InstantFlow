@@ -1,21 +1,293 @@
 "use client";
 
+import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
-import {
-  DefaultChatTransport,
-  lastAssistantMessageIsCompleteWithToolCalls,
-  type UIMessage,
-} from "ai";
+import { DefaultChatTransport, type UIMessage } from "ai";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
-  addFrame,
+  addFrameWithId,
   updateFrameHtml,
   setTheme,
   replaceTheme,
 } from "@/store/slices/canvasSlice";
+import { Brain, ChevronDown, CircleX } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { CloseIcon } from "./icons";
-import { wrapScreenBody } from "@/lib/screen-utils";
+import { PageMentionInput } from "./PageMentionInput";
+
+function getToolDisplayLabel(
+  toolType: string,
+  frames: { id: string; label: string }[],
+  input?: { id?: string; name?: string },
+  isCalled?: boolean,
+): string {
+  const toTitle = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
+
+  if (toolType === "step_analyzed_request")
+    return isCalled ? "Analyzed request" : "Analyzing request…";
+  if (toolType === "step_planned_screens")
+    return isCalled ? "Planned screens" : "Planning screens…";
+  if (toolType === "step_planned_visual_identity")
+    return isCalled ? "Planned visual identity" : "Planning visual identity…";
+
+  if (toolType === "build_theme")
+    return isCalled ? "Created theme" : "Creating theme…";
+  if (toolType === "update_theme")
+    return isCalled ? "Updated theme" : "Updating theme…";
+
+  if (toolType === "create_screen" && input?.name) {
+    return isCalled
+      ? `Created ${toTitle(input.name)} screen`
+      : `Creating ${toTitle(input.name)} screen…`;
+  }
+  if (
+    input?.id &&
+    (toolType === "read_screen" ||
+      toolType === "update_screen" ||
+      toolType === "edit_screen")
+  ) {
+    const frame = frames.find((f) => f.id === input.id);
+    const label = frame?.label ?? "Screen";
+    const name = toTitle(label);
+    if (toolType === "read_screen")
+      return isCalled ? `Read ${name} screen` : `Reading ${name} screen…`;
+    if (toolType === "edit_screen")
+      return isCalled ? `Edited ${name} screen` : `Editing ${name} screen…`;
+    if (toolType === "update_screen")
+      return isCalled ? `Updated ${name} screen` : `Updating ${name} screen…`;
+  }
+
+  const base = toTitle(toolType.replace(/_/g, " "));
+  return isCalled ? base : `${base}…`;
+}
+
+interface MessagePart {
+  type: string;
+  text?: string;
+  state?: string;
+  toolCallId?: string;
+  input?: {
+    id?: string;
+    name?: string;
+    screen_html?: string;
+  };
+}
+
+function ReasoningBlock({
+  text,
+  isStreaming,
+  isComplete,
+}: {
+  text: string;
+  isStreaming?: boolean;
+  isComplete?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(() => !!isStreaming && !isComplete);
+
+  useEffect(() => {
+    if (isComplete) {
+      setExpanded(false);
+    }
+  }, [isComplete]);
+
+  return (
+    <div className="not-prose flex w-full flex-col transition-all">
+      <button
+        type="button"
+        onClick={() => setExpanded((e) => !e)}
+        className="inline-flex w-full items-center justify-between gap-1 px-0 py-1 text-left"
+      >
+        <div className="flex items-center gap-1.5">
+          <Brain
+            className="size-3.5 shrink-0 text-white/90"
+            strokeWidth={1.5}
+          />
+          <span className="font-mono text-[11px] text-white/90 uppercase tracking-wider">
+            {expanded ? "Hide thinking" : "Thinking"}
+          </span>
+        </div>
+        <ChevronDown
+          className={`size-3.5 shrink-0 text-white/90 transition-transform ${
+            expanded ? "rotate-180" : ""
+          }`}
+          strokeWidth={2}
+        />
+      </button>
+      {expanded && text && (
+        <div className="chat-markdown py-1.5 text-sm text-white/60 font-sans">
+          <ReactMarkdown components={markdownComponents}>{text}</ReactMarkdown>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AssistantMessageContent({
+  parts,
+  frames,
+  isStreaming,
+}: {
+  parts: MessagePart[];
+  frames: { id: string; label: string }[];
+  isStreaming?: boolean;
+}) {
+  const blocks: Array<
+    | { kind: "text"; text: string }
+    | { kind: "reasoning"; text: string }
+    | { kind: "tools"; tools: MessagePart[] }
+  > = [];
+  let i = 0;
+  while (i < parts.length) {
+    const part = parts[i];
+    if (part.type === "text") {
+      blocks.push({ kind: "text", text: part.text ?? "" });
+      i++;
+    } else if (part.type === "reasoning") {
+      blocks.push({ kind: "reasoning", text: part.text ?? "" });
+      i++;
+    } else if (part.type.startsWith("tool-")) {
+      const toolGroup: MessagePart[] = [];
+      while (i < parts.length && parts[i].type.startsWith("tool-")) {
+        toolGroup.push(parts[i]);
+        i++;
+      }
+      blocks.push({ kind: "tools", tools: toolGroup });
+    } else {
+      i++;
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      {blocks.map((block, bi) =>
+        block.kind === "text" ? (
+          block.text ? (
+            <div key={bi} className="chat-markdown">
+              <ReactMarkdown components={markdownComponents}>
+                {block.text}
+              </ReactMarkdown>
+            </div>
+          ) : null
+        ) : block.kind === "reasoning" ? (
+          <ReasoningBlock
+            key={bi}
+            text={block.text}
+            isStreaming={isStreaming}
+            isComplete={!isStreaming || bi < blocks.length - 1}
+          />
+        ) : (
+          <div key={bi} className="flex flex-wrap gap-2">
+            {block.tools.map((tool, ti) => {
+              const toolType = tool.type.replace("tool-", "");
+              const isCalled = tool.state === "output-available";
+              const isError = tool.state === "output-error";
+              const isCalling =
+                !isCalled &&
+                !isError &&
+                (tool.state === "input-streaming" ||
+                  tool.state === "input-available" ||
+                  !tool.state);
+              const label = getToolDisplayLabel(
+                toolType,
+                frames,
+                tool.input,
+                isCalled || isError,
+              );
+              return (
+                <div
+                  key={ti}
+                  className={`not-prose flex w-fit flex-col rounded-md border transition-all ${
+                    isError
+                      ? "border-red-500/40 bg-red-500/10"
+                      : isCalled
+                        ? "border-emerald-500/40 bg-emerald-500/10"
+                        : "border-[#8A87F8]/40 bg-[#8A87F8]/10"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    className="inline-flex w-full items-center justify-between gap-2 px-2 py-1"
+                  >
+                    <div className="flex items-center gap-2">
+                      {isError ? (
+                        <CircleX
+                          className="size-3.5 shrink-0 text-red-400"
+                          strokeWidth={2}
+                        />
+                      ) : isCalled ? (
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="1em"
+                          height="1em"
+                          fill="currentColor"
+                          viewBox="0 0 256 256"
+                          className="size-3.5 shrink-0 text-emerald-400"
+                        >
+                          <path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z" />
+                        </svg>
+                      ) : isCalling ? (
+                        <span className="inline-block size-3.5 shrink-0 animate-pulse rounded-full bg-[#8A87F8]/80" />
+                      ) : (
+                        <span className="inline-block size-3.5 shrink-0 rounded-full bg-white/40" />
+                      )}
+                      <span
+                        className={`font-mono text-[11px] uppercase tracking-wider ${
+                          isError
+                            ? "text-red-300"
+                            : isCalled
+                              ? "text-emerald-300"
+                              : "text-white/90"
+                        }`}
+                      >
+                        {label}
+                      </span>
+                    </div>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ),
+      )}
+    </div>
+  );
+}
+
+const markdownComponents: React.ComponentProps<
+  typeof ReactMarkdown
+>["components"] = {
+  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+  ul: ({ children }) => (
+    <ul className="mb-2 list-disc space-y-1 pl-4">{children}</ul>
+  ),
+  ol: ({ children }) => (
+    <ol className="mb-2 list-decimal space-y-1 pl-4">{children}</ol>
+  ),
+  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+  code: ({ children }) => (
+    <code className="rounded bg-muted/80 px-1.5 py-0.5 font-mono text-xs">
+      {children}
+    </code>
+  ),
+  pre: ({ children }) => (
+    <pre className="mb-2 overflow-x-auto rounded-lg bg-muted/80 p-3 font-mono text-xs">
+      {children}
+    </pre>
+  ),
+  strong: ({ children }) => (
+    <strong className="font-semibold">{children}</strong>
+  ),
+  h1: ({ children }) => (
+    <h1 className="mb-2 mt-3 text-base font-semibold first:mt-0">{children}</h1>
+  ),
+  h2: ({ children }) => (
+    <h2 className="mb-2 mt-3 text-sm font-semibold first:mt-0">{children}</h2>
+  ),
+  h3: ({ children }) => (
+    <h3 className="mb-2 mt-2 text-sm font-medium first:mt-0">{children}</h3>
+  ),
+};
 
 const MIN_PANEL_WIDTH = 360;
 const MAX_PANEL_WIDTH = 600;
@@ -28,13 +300,6 @@ interface ChatPanelProps {
   isVisible: boolean;
   onClose: () => void;
   frameName?: string;
-}
-
-function extractBodyContent(fullHtml: string): string {
-  if (!fullHtml) return "";
-  const bodyMatch = fullHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-  if (bodyMatch) return bodyMatch[1].trim();
-  return fullHtml;
 }
 
 export function ChatPanel({
@@ -55,160 +320,58 @@ export function ChatPanel({
       ? (frames.find((f) => f.id === selectedFrameIds[0])?.label ?? frameName)
       : frameName;
 
-  const handleToolCall = useCallback(
-    (
-      toolName: string,
-      args: unknown,
-      addToolOutput: (params: {
-        tool: string;
-        toolCallId: string;
-        output: unknown;
-      }) => void,
-      toolCallId: string,
-    ) => {
-      try {
-        switch (toolName) {
-          case "read_screen": {
-            const { id } = args as { id: string };
-            const frame = frames.find((f) => f.id === id);
-            const html = frame?.html ? extractBodyContent(frame.html) : "";
-            addToolOutput({
-              tool: "read_screen",
-              toolCallId,
-              output: html || "(empty screen)",
-            });
-            break;
-          }
-          case "read_theme": {
-            addToolOutput({
-              tool: "read_theme",
-              toolCallId,
-              output: JSON.stringify(theme, null, 2),
-            });
-            break;
-          }
-          case "create_screen": {
-            const { name, screen_html } = args as {
-              name: string;
-              screen_html: string;
-            };
-            const lastFrame = frames[frames.length - 1];
-            const left = lastFrame ? lastFrame.left + FRAME_SPACING : 0;
-            const top = lastFrame ? lastFrame.top : 0;
-            const fullHtml = wrapScreenBody(screen_html, theme);
-            dispatch(
-              addFrame({
-                label: name,
-                left,
-                top,
-                html: fullHtml,
-              }),
-            );
-            addToolOutput({
-              tool: "create_screen",
-              toolCallId,
-              output: { success: true, message: `Created screen "${name}"` },
-            });
-            break;
-          }
-          case "update_screen": {
-            const { id, screen_html } = args as {
-              id: string;
-              screen_html: string;
-            };
-            const fullHtml = wrapScreenBody(screen_html, theme);
-            dispatch(updateFrameHtml({ id, html: fullHtml }));
-            addToolOutput({
-              tool: "update_screen",
-              toolCallId,
-              output: { success: true },
-            });
-            break;
-          }
-          case "edit_screen": {
-            const { id, find, replace } = args as {
-              id: string;
-              find: string;
-              replace: string;
-            };
-            const frame = frames.find((f) => f.id === id);
-            if (!frame?.html) {
-              addToolOutput({
-                tool: "edit_screen",
-                toolCallId,
-                output: { success: false, error: "Screen not found" },
-              });
-              return;
-            }
-            if (!frame.html.includes(find)) {
-              addToolOutput({
-                tool: "edit_screen",
-                toolCallId,
-                output: {
-                  success: false,
-                  error:
-                    "Find string not found - ensure exact match from read_screen",
-                },
-              });
-              return;
-            }
-            const newHtml = frame.html.replace(find, replace);
-            dispatch(updateFrameHtml({ id, html: newHtml }));
-            addToolOutput({
-              tool: "edit_screen",
-              toolCallId,
-              output: { success: true },
-            });
-            break;
-          }
-          case "update_theme": {
-            const { updates } = args as { updates: Record<string, string> };
-            dispatch(setTheme(updates));
-            addToolOutput({
-              tool: "update_theme",
-              toolCallId,
-              output: { success: true },
-            });
-            break;
-          }
-          case "build_theme": {
-            const { theme_vars } = args as {
-              description: string;
-              theme_vars: Record<string, string>;
-            };
-            dispatch(replaceTheme(theme_vars));
-            addToolOutput({
-              tool: "build_theme",
-              toolCallId,
-              output: {
-                success: true,
-                message: "Theme built from user prompt",
-              },
-            });
-            break;
-          }
-          default:
-            addToolOutput({
-              tool: toolName,
-              toolCallId,
-              output: { error: `Unknown tool: ${toolName}` },
-            });
-        }
-      } catch (err) {
-        addToolOutput({
-          tool: toolName,
-          toolCallId,
-          output: {
-            error: err instanceof Error ? err.message : "Tool execution failed",
-          },
-        });
-      }
-    },
-    [dispatch, frames, theme],
-  );
-
   const stateRef = useRef({ frames, theme });
   stateRef.current = { frames, theme };
+
+  const handleFrameAction = useCallback(
+    (data: {
+      action: string;
+      payload?: {
+        id?: string;
+        label?: string;
+        left?: number;
+        top?: number;
+        html?: string;
+        updates?: Record<string, string>;
+        theme?: Record<string, string>;
+      };
+    }) => {
+      if (!data?.action) return;
+      switch (data.action) {
+        case "add":
+          if (data.payload?.id && data.payload?.label !== undefined) {
+            dispatch(
+              addFrameWithId({
+                id: data.payload.id,
+                label: data.payload.label,
+                left: data.payload.left ?? 0,
+                top: data.payload.top ?? 0,
+                html: data.payload.html ?? "",
+              }),
+            );
+          }
+          break;
+        case "updateHtml":
+          if (data.payload?.id && data.payload?.html !== undefined) {
+            dispatch(
+              updateFrameHtml({ id: data.payload.id, html: data.payload.html }),
+            );
+          }
+          break;
+        case "setTheme":
+          if (data.payload?.updates) {
+            dispatch(setTheme(data.payload.updates));
+          }
+          break;
+        case "replaceTheme":
+          if (data.payload?.theme) {
+            dispatch(replaceTheme(data.payload.theme));
+          }
+          break;
+      }
+    },
+    [dispatch],
+  );
 
   const transportRef = useRef<DefaultChatTransport<UIMessage> | null>(null);
   if (!transportRef.current) {
@@ -229,26 +392,14 @@ export function ChatPanel({
   }
   const transport = transportRef.current;
 
-  const { messages, sendMessage, addToolOutput, status } = useChat({
+  const { messages, sendMessage, status } = useChat({
     transport,
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
-    onToolCall({
-      toolCall,
-    }: {
-      toolCall: {
-        dynamic?: boolean;
-        toolName: string;
-        input: unknown;
-        toolCallId: string;
-      };
-    }) {
-      if (toolCall.dynamic) return;
-      handleToolCall(
-        toolCall.toolName,
-        toolCall.input,
-        (params) => addToolOutput(params),
-        toolCall.toolCallId,
-      );
+    onData: (dataPart) => {
+      if (dataPart.type === "data-frame-action" && dataPart.data) {
+        handleFrameAction(
+          dataPart.data as Parameters<typeof handleFrameAction>[0],
+        );
+      }
     },
   });
 
@@ -344,15 +495,18 @@ export function ChatPanel({
       <div
         ref={chatThreadRef}
         id="chat-thread-area"
-        className="min-h-0 flex-1 space-y-4 overflow-y-auto p-2"
+        className="min-h-0 flex-1 space-y-4 overflow-y-auto scrollbar-hide p-2"
       >
         {messages.map(
-          (msg: {
-            id: string;
-            role: string;
-            parts?: Array<{ type: string; text?: string; state?: string }>;
-            content?: string;
-          }) => (
+          (
+            msg: {
+              id: string;
+              role: string;
+              parts?: Array<{ type: string; text?: string; state?: string }>;
+              content?: string;
+            },
+            msgIndex: number,
+          ) => (
             <div
               key={msg.id}
               className={`flex w-full ${
@@ -360,12 +514,12 @@ export function ChatPanel({
               }`}
             >
               <div
-                className={`w-fit max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                className={`rounded-lg px-3 py-2 text-sm ${
                   msg.role === "user"
-                    ? "text-white"
+                    ? "w-fit max-w-[85%] text-white"
                     : msg.role === "assistant"
-                      ? "bg-muted/50 text-stone-300"
-                      : "bg-muted/30"
+                      ? "w-full bg-muted/50 text-stone-300"
+                      : "w-fit max-w-[85%] bg-muted/30"
                 }`}
                 style={
                   msg.role === "user"
@@ -373,38 +527,44 @@ export function ChatPanel({
                     : undefined
                 }
               >
-                {msg.parts?.map(
-                  (
-                    part: { type: string; text?: string; state?: string },
-                    i: number,
-                  ) => {
-                    if (part.type === "text") {
-                      return (
-                        <p key={i} className="whitespace-pre-wrap">
-                          {part.text}
-                        </p>
-                      );
-                    }
-                    if (part.type.startsWith("tool-")) {
-                      const name = part.type.replace("tool-", "");
-                      return (
-                        <div key={i} className="mt-2 text-xs text-stone-400">
-                          {name}:{" "}
-                          {part.state === "output-available" ? "✓" : "..."}
-                        </div>
-                      );
-                    }
-                    return null;
-                  },
-                ) ?? (typeof msg.content === "string" ? msg.content : null)}
+                {msg.role === "assistant" ? (
+                  msg.parts && msg.parts.length > 0 ? (
+                    <AssistantMessageContent
+                      parts={msg.parts as MessagePart[]}
+                      frames={frames}
+                      isStreaming={
+                        msg.role === "assistant" &&
+                        status === "streaming" &&
+                        msgIndex === messages.length - 1
+                      }
+                    />
+                  ) : typeof msg.content === "string" ? (
+                    <div className="chat-markdown">
+                      <ReactMarkdown components={markdownComponents}>
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+                  ) : null
+                ) : msg.role === "user" ? (
+                  (() => {
+                    if (typeof msg.content === "string") return msg.content;
+                    const textPart = msg.parts?.find(
+                      (p: { type: string; text?: string }) =>
+                        p.type === "text" && p.text,
+                    );
+                    return textPart?.text ?? null;
+                  })()
+                ) : null}
               </div>
             </div>
           ),
         )}
-        {status === "streaming" && (
+        {(status === "submitted" || status === "streaming") && (
           <div className="flex w-full justify-start">
-            <div className="w-fit max-w-[85%] rounded-lg bg-muted/50 px-3 py-2 text-sm text-stone-300">
-              Thinking…
+            <div className="w-fit max-w-[85%] rounded-lg bg-muted/50 px-3 py-2 text-sm text-stone-400">
+              {status === "submitted"
+                ? "Analyzing your request…"
+                : "Creating designs…"}
             </div>
           </div>
         )}
@@ -413,27 +573,31 @@ export function ChatPanel({
       <div className="w-full p-4">
         <form
           onSubmit={handleSend}
-          className="w-full overflow-hidden rounded-xl border border-border/60 shadow-none focus-within:ring-2 focus-within:ring-ring/30"
+          className="w-full overflow-visible rounded-xl border border-border/60 shadow-none focus-within:ring-2 focus-within:ring-ring/30"
           style={{ backgroundColor: "#2e2726" }}
         >
-          <textarea
+          <PageMentionInput
             value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
+            onChange={setInputValue}
+            pages={frames.map((f) => ({ id: f.id, label: f.label }))}
+            placeholder="Describe what you want to create or change…"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 handleSend();
               }
             }}
-            name="prompt"
-            placeholder="Describe what you want to create or change…"
-            className="w-full max-h-32 min-h-12 resize-none rounded-none border-none bg-transparent p-4 text-sm text-white/90 shadow-none outline-none ring-0 placeholder:text-zinc-400 focus-visible:ring-0"
-            style={{ fieldSizing: "content" } as React.CSSProperties}
+            disabled={status === "submitted" || status === "streaming"}
+            className="text-sm"
           />
           <div className="flex items-center justify-end p-2">
             <button
               type="submit"
-              disabled={!inputValue.trim() || status === "streaming"}
+              disabled={
+                !inputValue.trim() ||
+                status === "submitted" ||
+                status === "streaming"
+              }
               className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-[#8A87F8] text-white shadow-xs outline-none transition-colors hover:bg-[#8A87F8]/90 disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-95"
             >
               <svg

@@ -1,4 +1,5 @@
 import { createSlice } from "@reduxjs/toolkit";
+import { wrapScreenBody, extractBodyContent } from "@/lib/screen-utils";
 
 export interface CanvasTransform {
   x: number;
@@ -13,7 +14,8 @@ export interface FrameState {
   label: string;
   left: number;
   top: number;
-  /** Full HTML document for the screen (head + body). Managed by agent. */
+  width?: number;
+  height?: number;
   html: string;
 }
 
@@ -56,6 +58,23 @@ const canvasSlice = createSlice({
         html: payload.html ?? "",
       });
     },
+    /** Add frame with a specific id. Used for placeholder frames from tool streaming. */
+    addFrameWithId: (
+      state,
+      action: {
+        payload: {
+          id: string;
+          label: string;
+          left: number;
+          top: number;
+          html?: string;
+        };
+      },
+    ) => {
+      const { id, label, left, top, html = "" } = action.payload;
+      if (state.frames.some((f) => f.id === id)) return;
+      state.frames.push({ id, label, left, top, html });
+    },
     updateFrame: (
       state,
       action: { payload: { id: string; changes: Partial<FrameState> } },
@@ -81,15 +100,35 @@ const canvasSlice = createSlice({
       });
       state.selectedFrameIds = [newId];
     },
-    updateFrameHtml: (state, action: { payload: { id: string; html: string } }) => {
+    updateFrameHtml: (
+      state,
+      action: { payload: { id: string; html: string } },
+    ) => {
       const frame = state.frames.find((f) => f.id === action.payload.id);
       if (frame) frame.html = action.payload.html;
     },
     setTheme: (state, action: { payload: Partial<ThemeVariables> }) => {
-      state.theme = { ...state.theme, ...action.payload };
+      const updates = action.payload;
+      for (const k of Object.keys(updates)) {
+        const v = updates[k];
+        if (v !== undefined) state.theme[k] = v;
+      }
+      const fullTheme = { ...state.theme };
+      for (const frame of state.frames) {
+        const bodyContent = extractBodyContent(frame.html);
+        if (bodyContent) {
+          frame.html = wrapScreenBody(bodyContent, fullTheme);
+        }
+      }
     },
     replaceTheme: (state, action: { payload: ThemeVariables }) => {
-      state.theme = action.payload;
+      state.theme = { ...action.payload };
+      for (const frame of state.frames) {
+        const bodyContent = extractBodyContent(frame.html);
+        if (bodyContent) {
+          frame.html = wrapScreenBody(bodyContent, state.theme);
+        }
+      }
     },
     reorderFrames: (state, action: { payload: string[] }) => {
       const order = action.payload;
@@ -114,6 +153,7 @@ export const {
   setTransform,
   setZoom,
   addFrame,
+  addFrameWithId,
   updateFrame,
   removeFrame,
   duplicateFrame,

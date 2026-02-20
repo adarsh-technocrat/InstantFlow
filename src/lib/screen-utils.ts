@@ -7,7 +7,7 @@ export const SCREEN_HTML_HEAD = `<!DOCTYPE html>
     <title>Screen</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Poppins:wght@100..900&family=Fira+Code:wght@300..700&family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://code.iconify.design/iconify-icon/3.0.0/iconify-icon.min.js"></script>
     <style type="text/tailwindcss">
@@ -40,7 +40,6 @@ export const SCREEN_HTML_TAIL = `</body></html>`;
 
 export type ThemeVariables = Record<string, string>;
 
-/** Only used when theme is empty (before user builds theme). Enables basic rendering. */
 const EMPTY_THEME_FALLBACK: ThemeVariables = {
   "--background": "#ffffff",
   "--foreground": "#000000",
@@ -77,4 +76,12 @@ export function wrapScreenBody(
   const themeCSS = themeVarsToCSS(activeTheme);
   const headWithTheme = SCREEN_HTML_HEAD.replace(THEME_PLACEHOLDER, themeCSS);
   return `${headWithTheme}\n${bodyContent}\n${SCREEN_HTML_TAIL}`;
+}
+
+/** Extract inner body content from full HTML document. Used by read_screen. */
+export function extractBodyContent(fullHtml: string): string {
+  if (!fullHtml) return "";
+  const bodyMatch = fullHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  if (bodyMatch) return bodyMatch[1].trim();
+  return fullHtml;
 }

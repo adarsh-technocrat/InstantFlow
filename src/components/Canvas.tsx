@@ -327,6 +327,8 @@ export function Canvas() {
             label={frame.label}
             left={frame.left}
             top={frame.top}
+            width={frame.width}
+            height={frame.height}
             selected={selectedFrameIds.includes(frame.id)}
             onSelect={handleFrameSelect}
             showToolbar={
@@ -337,9 +339,17 @@ export function Canvas() {
             onPositionChange={(newLeft, newTop) =>
               updateFrameProperties(frame.id, { left: newLeft, top: newTop })
             }
+            onSizeChange={(changes) => updateFrameProperties(frame.id, changes)}
             spaceHeld={spaceHeld}
           >
-            <FramePreview html={frame.html} />
+            <FramePreview
+              frameId={frame.id}
+              html={frame.html}
+              allowInteraction={
+                selectedFrameIds.includes(frame.id) &&
+                selectedFrameIds.length === 1
+              }
+            />
           </Frame>
         ))}
       </div>

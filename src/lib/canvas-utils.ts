@@ -16,21 +16,29 @@ export function convertClientPointToContentPoint(
 }
 
 export function getFramesIntersectingRectangle(
-  frames: { id: string; left: number; top: number }[],
+  frames: {
+    id: string;
+    left: number;
+    top: number;
+    width?: number;
+    height?: number;
+  }[],
   x1: number,
   y1: number,
   x2: number,
   y2: number,
-  frameWidth: number,
-  frameHeight: number,
+  defaultWidth: number,
+  defaultHeight: number,
 ) {
   const left = Math.min(x1, x2);
   const right = Math.max(x1, x2);
   const top = Math.min(y1, y2);
   const bottom = Math.max(y1, y2);
   return frames.filter((f) => {
-    const fRight = f.left + frameWidth;
-    const fBottom = f.top + frameHeight;
+    const w = f.width ?? defaultWidth;
+    const h = f.height ?? defaultHeight;
+    const fRight = f.left + w;
+    const fBottom = f.top + h;
     return !(
       right < f.left ||
       left > fRight ||

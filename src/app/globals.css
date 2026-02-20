@@ -11,6 +11,7 @@
   --muted-foreground: #71717a;
   --foreground-muted: #71717a;
   --frame-border: #a78bfa;
+  --frame-hover-border: #6366f1;
   /* Layout glass – theme-aligned (light) */
   --panel-glass-bg: rgba(255, 255, 255, 0.88);
   --panel-glass-border: rgba(228, 228, 231, 0.6);
@@ -22,6 +23,7 @@
 }
 
 @theme inline {
+  --color-frame-hover-border: var(--frame-hover-border);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-border: var(--border);
@@ -49,6 +51,7 @@
     --muted-foreground: #a1a1aa;
     --foreground-muted: #a1a1aa;
     --frame-border: #c4b5fd;
+    --frame-hover-border: #818cf8;
     --primary: #18181b;
     --primary-foreground: #fafafa;
     --secondary: #27272a;
@@ -83,4 +86,12 @@ body {
 .bg-canvas-panel {
   background-color: #0d0807;
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
