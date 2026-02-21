@@ -137,6 +137,26 @@ const canvasSlice = createSlice({
     setSelectedFrames: (state, action: { payload: string[] }) => {
       state.selectedFrameIds = action.payload;
     },
+    loadFrames: (
+      state,
+      action: {
+        payload: Array<{
+          id: string;
+          label?: string;
+          left?: number;
+          top?: number;
+          html?: string;
+        }>;
+      },
+    ) => {
+      state.frames = action.payload.map((f) => ({
+        id: f.id,
+        label: f.label ?? "Screen",
+        left: f.left ?? 0,
+        top: f.top ?? 0,
+        html: f.html ?? "",
+      }));
+    },
     toggleFrameInSelection: (state, action: { payload: string }) => {
       const id = action.payload;
       const i = state.selectedFrameIds.indexOf(id);
@@ -154,6 +174,7 @@ export const {
   setZoom,
   addFrame,
   addFrameWithId,
+  loadFrames,
   updateFrame,
   removeFrame,
   duplicateFrame,

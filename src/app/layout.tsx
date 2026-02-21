@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { StoreProvider } from "@/store/StoreProvider";
-import { BrowserZoomBlocker } from "@/components/BrowserZoomBlocker";
+import { ProjectProvider } from "@/contexts/ProjectContext";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -37,8 +37,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <BrowserZoomBlocker />
-        <StoreProvider>{children}</StoreProvider>
+        <StoreProvider>
+          <ProjectProvider>{children}</ProjectProvider>
+        </StoreProvider>
         <Toaster position="bottom-center" richColors />
       </body>
     </html>

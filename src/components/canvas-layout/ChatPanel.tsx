@@ -5,9 +5,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { useProject } from "@/contexts/ProjectContext";
 import {
   addFrameWithId,
   updateFrameHtml,
+  updateFrame,
   setTheme,
   replaceTheme,
 } from "@/store/slices/canvasSlice";
@@ -24,8 +26,6 @@ function getToolDisplayLabel(
 ): string {
   const toTitle = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
 
-  if (toolType === "create_theme")
-    return isCalled ? "Created theme" : "Creating theme…";
   if (toolType === "build_theme")
     return isCalled ? "Created theme" : "Creating theme…";
   if (toolType === "update_theme")
@@ -357,6 +357,8 @@ export function ChatPanel({
 
   const stateRef = useRef({ frames, theme });
   stateRef.current = { frames, theme };
+  const { data: projectData, loaded: projectLoaded } = useProject();
+  const hasHydratedFromProject = useRef(false);
 
   const handleFrameAction = useCallback(
     (data: {
@@ -384,6 +386,19 @@ export function ChatPanel({
                 html: data.payload.html ?? "",
               }),
             );
+            if (data.payload.html && data.payload.html.length > 0) {
+              fetch("/api/frames", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  frameId: data.payload.id,
+                  html: data.payload.html,
+                  label: data.payload.label,
+                  left: data.payload.left,
+                  top: data.payload.top,
+                }),
+              }).catch(() => {});
+            }
           }
           break;
         case "updateHtml":
@@ -391,6 +406,53 @@ export function ChatPanel({
             dispatch(
               updateFrameHtml({ id: data.payload.id, html: data.payload.html }),
             );
+            if (data.payload.html.length > 0) {
+              const frame = stateRef.current.frames.find(
+                (f) => f.id === data.payload?.id,
+              );
+              fetch("/api/frames", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  frameId: data.payload.id,
+                  html: data.payload.html,
+                  label: frame?.label,
+                  left: frame?.left,
+                  top: frame?.top,
+                }),
+              }).catch(() => {});
+            }
+          }
+          break;
+        case "updateFrame":
+          if (data.payload?.id) {
+            const changes: { label?: string; html?: string } = {};
+            if (data.payload.label !== undefined)
+              changes.label = data.payload.label;
+            if (data.payload.html !== undefined)
+              changes.html = data.payload.html;
+            if (Object.keys(changes).length > 0) {
+              dispatch(updateFrame({ id: data.payload.id, changes }));
+              if (
+                data.payload.html !== undefined &&
+                data.payload.html.length > 0
+              ) {
+                const frame = stateRef.current.frames.find(
+                  (f) => f.id === data.payload?.id,
+                );
+                fetch("/api/frames", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    frameId: data.payload.id,
+                    html: data.payload.html,
+                    label: frame?.label ?? data.payload.label,
+                    left: frame?.left ?? data.payload.left,
+                    top: frame?.top ?? data.payload.top,
+                  }),
+                }).catch(() => {});
+              }
+            }
           }
           break;
         case "setTheme":
@@ -427,7 +489,7 @@ export function ChatPanel({
   }
   const transport = transportRef.current;
 
-  const { messages, sendMessage, status } = useChat({
+  const { messages, setMessages, sendMessage, status } = useChat({
     transport,
     onData: (dataPart) => {
       if (dataPart.type === "data-frame-action" && dataPart.data) {
@@ -436,7 +498,46 @@ export function ChatPanel({
         );
       }
     },
+    onFinish: ({ messages: finishedMessages, isAbort, isError }) => {
+      if (!isAbort && !isError && finishedMessages.length > 0) {
+        fetch("/api/chat/sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: finishedMessages }),
+        }).catch(() => {});
+      }
+    },
   });
+
+  useEffect(() => {
+    if (
+      !hasHydratedFromProject.current &&
+      projectLoaded &&
+      projectData?.messages &&
+      Array.isArray(projectData.messages) &&
+      projectData.messages.length > 0
+    ) {
+      hasHydratedFromProject.current = true;
+      setMessages(projectData.messages as UIMessage[]);
+    }
+  }, [projectLoaded, projectData?.messages, setMessages]);
+
+  const persistTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (messages.length === 0 || status === "streaming") return;
+    if (persistTimeoutRef.current) clearTimeout(persistTimeoutRef.current);
+    persistTimeoutRef.current = setTimeout(() => {
+      persistTimeoutRef.current = null;
+      fetch("/api/chat/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages }),
+      }).catch(() => {});
+    }, 1500);
+    return () => {
+      if (persistTimeoutRef.current) clearTimeout(persistTimeoutRef.current);
+    };
+  }, [messages, status]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();

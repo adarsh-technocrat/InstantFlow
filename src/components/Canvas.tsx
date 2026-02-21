@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { SelectionToast } from "@/components/custom-toast/selection-toast";
 import { Frame } from "@/components/Frame";
@@ -22,6 +22,39 @@ export function Canvas() {
     duplicateFrameById,
     zoomCanvasAtCursorPosition,
   } = useCanvas();
+
+  const persistFramePosition = useCallback(
+    (
+      frameId: string,
+      label?: string,
+      left?: number,
+      top?: number,
+      html?: string,
+    ) => {
+      const frame = frames.find((f) => f.id === frameId);
+      if (!frame) return;
+      fetch("/api/frames", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          frameId: frame.id,
+          html: html ?? frame.html,
+          label: label ?? frame.label,
+          left: left ?? frame.left,
+          top: top ?? frame.top,
+        }),
+      }).catch(() => {});
+    },
+    [frames],
+  );
+
+  const handlePositionChange = useCallback(
+    (id: string, newLeft: number, newTop: number) => {
+      updateFrameProperties(id, { left: newLeft, top: newTop });
+      persistFramePosition(id, undefined, newLeft, newTop);
+    },
+    [updateFrameProperties, persistFramePosition],
+  );
 
   const {
     isPanning,
@@ -140,7 +173,7 @@ export function Canvas() {
             }
             canvasScale={scale}
             onPositionChange={(newLeft, newTop) =>
-              updateFrameProperties(frame.id, { left: newLeft, top: newTop })
+              handlePositionChange(frame.id, newLeft, newTop)
             }
             onSizeChange={(changes) => updateFrameProperties(frame.id, changes)}
             spaceHeld={spaceHeld}
@@ -154,6 +187,9 @@ export function Canvas() {
             <FramePreview
               frameId={frame.id}
               html={frame.html}
+              label={frame.label}
+              left={frame.left}
+              top={frame.top}
               allowInteraction={
                 selectedFrameIds.includes(frame.id) &&
                 selectedFrameIds.length === 1

@@ -1,17 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
-import { frameStore } from "./store";
+import { setFrame } from "./store";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { frameId, html } = body as { frameId?: string; html?: string };
+    const {
+      frameId,
+      html,
+      label,
+      left,
+      top,
+    } = body as {
+      frameId?: string;
+      html?: string;
+      label?: string;
+      left?: number;
+      top?: number;
+    };
     if (!frameId || typeof html !== "string") {
       return NextResponse.json(
         { error: "frameId and html required" },
         { status: 400 },
       );
     }
-    frameStore.set(frameId, html);
+    await setFrame(frameId, html, { label, left, top });
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json(
