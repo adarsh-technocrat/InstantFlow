@@ -100,7 +100,31 @@ body {
   display: none;
 }
 
-/* Shiki dual theme – dark mode. Only the block gets background; spans stay transparent. */
+@keyframes frame-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.frame-fade-in {
+  animation: frame-fade-in 0.3s ease-out;
+}
+
+.frame-preview-gradient {
+  background: linear-gradient(
+    135deg,
+    #1a1615 0%,
+    #2a2524 25%,
+    #1d1716 50%,
+    #2a2524 75%,
+    #1a1615 100%
+  );
+  background-size: 200% 200%;
+  animation: frame-preview-shimmer 2s ease infinite;
+}
+
 @media (prefers-color-scheme: dark) {
   .shiki {
     color: var(--shiki-dark) !important;

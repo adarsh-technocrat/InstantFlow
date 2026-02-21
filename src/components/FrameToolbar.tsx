@@ -141,7 +141,9 @@ export function FrameToolbar({
       }}
     >
       <div className="flex cursor-grab items-center gap-1.5">
-        <DragHandleIcon />
+        <span data-drag-handle className="cursor-grab">
+          <DragHandleIcon />
+        </span>
         <div className="min-w-18 flex flex-col gap-2 font-medium text-sm">
           <div
             className="relative inline-block min-w-0 cursor-default select-none truncate rounded border border-transparent py-0 text-sm text-white/90 hover:text-white/70"

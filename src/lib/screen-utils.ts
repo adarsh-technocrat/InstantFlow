@@ -1,4 +1,3 @@
-/** HTML shell wrapper for screen body content. Includes Tailwind, Iconify, theme. */
 export const SCREEN_HTML_HEAD = `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -40,7 +39,6 @@ export const SCREEN_HTML_TAIL = `</body></html>`;
 
 export type ThemeVariables = Record<string, string>;
 
-/** Map model abbreviations/typos to valid CSS variable names. */
 const THEME_KEY_ALIASES: Record<string, string> = {
   r: "--primary",
   y: "--secondary",
@@ -66,10 +64,6 @@ const THEME_KEY_ALIASES: Record<string, string> = {
   "font-heading": "--font-heading",
 };
 
-/**
- * Normalize raw theme vars from the model (which may use abbreviations like "r", "y"
- * or missing "--" prefix) into valid ThemeVariables.
- */
 export function normalizeThemeVars(
   raw: Record<string, string>,
 ): ThemeVariables {
@@ -78,10 +72,9 @@ export function normalizeThemeVars(
     if (!v || typeof v !== "string") continue;
     const key = k.trim();
     if (!key) continue;
-    const normalized =
-      key.startsWith("--")
-        ? key
-        : THEME_KEY_ALIASES[key] ?? `--${key.replace(/^--/, "")}`;
+    const normalized = key.startsWith("--")
+      ? key
+      : (THEME_KEY_ALIASES[key] ?? `--${key.replace(/^--/, "")}`);
     out[normalized] = v;
   }
   return out;
@@ -126,10 +119,23 @@ export function wrapScreenBody(
   return `${headWithTheme}\n${bodyContent}\n${SCREEN_HTML_TAIL}`;
 }
 
-/** Extract inner body content from full HTML document. Used by read_screen. */
 export function extractBodyContent(fullHtml: string): string {
   if (!fullHtml) return "";
   const bodyMatch = fullHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
   if (bodyMatch) return bodyMatch[1].trim();
   return fullHtml;
+}
+
+export function injectFrameScripts(html: string): string {
+  const scrollbarHideStyle =
+    "<style>html,body{-ms-overflow-style:none;scrollbar-width:none}html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}</style>";
+  const zoomScript = `<script>(function(){document.addEventListener("wheel",function(e){if(e.ctrlKey||e.metaKey){e.preventDefault();e.stopPropagation();try{window.parent.postMessage({type:"canvas-zoom",deltaY:e.deltaY,clientX:e.clientX,clientY:e.clientY},"*")}catch(_){}}},{passive:false,capture:true})})();</script>`;
+  const inject = scrollbarHideStyle + zoomScript;
+  if (html.includes("</head>")) {
+    return html.replace("</head>", `${inject}</head>`);
+  }
+  if (/<body[\s>]/i.test(html)) {
+    return html.replace(/<body(\s[^>]*)?>/i, (m) => m + inject);
+  }
+  return html + inject;
 }

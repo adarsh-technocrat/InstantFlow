@@ -1,25 +1,73 @@
+import {
+  GoogleGenAI,
+  FunctionCallingConfigMode,
+  type Content,
+} from "@google/genai";
 import { createVertex } from "@ai-sdk/google-vertex";
 import {
-  streamText,
   generateObject,
   generateImage,
   convertToModelMessages,
   tool,
   createUIMessageStream,
   createUIMessageStreamResponse,
-  stepCountIs,
   type ModelMessage,
 } from "ai";
+
 import { z } from "zod";
+
 import { getSystemPrompt } from "@/constants/agent-prompts";
+
 import {
   wrapScreenBody,
   extractBodyContent,
   normalizeThemeVars,
 } from "@/lib/screen-utils";
+
 import type { ThemeVariables } from "@/lib/screen-utils";
+import { GENAI_FUNCTION_DECLARATIONS } from "@/lib/genai-tools";
+import { modelMessagesToGenAIContents } from "@/lib/genai-content";
 
 export const maxDuration = 30;
+
+function getGenAI(): GoogleGenAI {
+  const apiKey =
+    process.env.GEMINI_API_KEY ??
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY ??
+    process.env.GOOGLE_API_KEY;
+  const project = (
+    process.env.GOOGLE_CLOUD_PROJECT ?? process.env.GOOGLE_VERTEX_PROJECT
+  )?.trim();
+  const location =
+    process.env.GOOGLE_CLOUD_LOCATION ??
+    process.env.GOOGLE_VERTEX_LOCATION ??
+    "us-central1";
+  const hasVertexCreds =
+    process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY;
+
+  if (project) {
+    return new GoogleGenAI({
+      vertexai: true,
+      project,
+      location,
+      ...(hasVertexCreds && {
+        googleAuthOptions: {
+          credentials: {
+            client_email: process.env.GOOGLE_CLIENT_EMAIL,
+            private_key: process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, "\n"),
+            private_key_id: process.env.GOOGLE_PRIVATE_KEY_ID,
+          },
+        },
+      }),
+    });
+  }
+  if (apiKey) {
+    return new GoogleGenAI({ apiKey });
+  }
+  throw new Error(
+    "GenAI auth not configured. Set GOOGLE_CLOUD_PROJECT (and optionally GOOGLE_CLIENT_EMAIL + GOOGLE_PRIVATE_KEY) for Vertex, or GEMINI_API_KEY for Gemini API.",
+  );
+}
 
 const vertex = createVertex({
   ...(process.env.GOOGLE_CLIENT_EMAIL &&
@@ -50,6 +98,133 @@ interface FrameState {
 }
 
 const FRAME_SPACING = 420;
+
+const STREAM_THROTTLE_MS = 120;
+
+function mergePartialArgs(
+  obj: Record<string, unknown>,
+  partialArgs: Array<{
+    jsonPath?: string;
+    stringValue?: string;
+    numberValue?: number;
+    boolValue?: boolean;
+    nullValue?: unknown;
+    willContinue?: boolean;
+  }>,
+): void {
+  for (const pa of partialArgs ?? []) {
+    const path = (pa.jsonPath ?? "$").replace(/^\$\.?/, "").split(".");
+    if (path.length === 0 || path[0] === "") continue;
+    let cur: Record<string, unknown> = obj;
+    for (let i = 0; i < path.length - 1; i++) {
+      const k = path[i];
+      if (!(k in cur) || typeof cur[k] !== "object" || cur[k] === null) {
+        cur[k] = {};
+      }
+      cur = cur[k] as Record<string, unknown>;
+    }
+    const last = path[path.length - 1];
+    if ("stringValue" in pa && pa.stringValue !== undefined) {
+      cur[last] = ((cur[last] as string) ?? "") + pa.stringValue;
+    } else if ("numberValue" in pa && pa.numberValue !== undefined) {
+      cur[last] = pa.numberValue;
+    } else if ("boolValue" in pa && pa.boolValue !== undefined) {
+      cur[last] = pa.boolValue;
+    } else if ("nullValue" in pa) {
+      cur[last] = null;
+    }
+  }
+}
+
+function parseUpdateScreenPartial(
+  text: string,
+): { id?: string; screen_html?: string } | null {
+  if (!text || typeof text !== "string") return null;
+  try {
+    let repaired = text.trim();
+    if (!repaired.startsWith("{")) return null;
+    if (!repaired.endsWith("}")) {
+      if (repaired.endsWith('"')) {
+        repaired += "}";
+      } else if (/"[^"]*$/.test(repaired) || /:\s*$/.test(repaired)) {
+        repaired += '"}';
+      } else {
+        repaired += "}";
+      }
+    }
+    const parsed = JSON.parse(repaired) as {
+      id?: string;
+      screen_html?: string;
+    };
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function extractPartialScreenHtml(buffer: string): string | null {
+  const key = '"screen_html"';
+  const idx = buffer.indexOf(key);
+  if (idx === -1) return null;
+  const valStart = buffer.indexOf('"', idx + key.length);
+  if (valStart === -1) return null;
+  let i = valStart + 1;
+  let out = "";
+  while (i < buffer.length) {
+    const c = buffer[i];
+    if (c === "\\") {
+      if (i + 1 >= buffer.length) break;
+      const next = buffer[i + 1];
+      if (next === '"') {
+        out += '"';
+        i += 2;
+      } else if (next === "\\") {
+        out += "\\";
+        i += 2;
+      } else if (next === "n") {
+        out += "\n";
+        i += 2;
+      } else if (next === "t") {
+        out += "\t";
+        i += 2;
+      } else {
+        out += next;
+        i += 2;
+      }
+      continue;
+    }
+    if (c === '"') break;
+    out += c;
+    i++;
+  }
+  return out.length > 0 ? out : null;
+}
+
+function parseCreateScreenPartial(
+  text: string,
+): { name?: string; screen_html?: string } | null {
+  if (!text || typeof text !== "string") return null;
+  try {
+    let repaired = text.trim();
+    if (!repaired.startsWith("{")) return null;
+    if (!repaired.endsWith("}")) {
+      if (repaired.endsWith('"')) {
+        repaired += "}";
+      } else if (/"[^"]*$/.test(repaired) || /:\s*$/.test(repaired)) {
+        repaired += '"}';
+      } else {
+        repaired += "}";
+      }
+    }
+    const parsed = JSON.parse(repaired) as {
+      name?: string;
+      screen_html?: string;
+    };
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 const PLANNER_CLASSIFY_PROMPT = `Given a user request for a mobile app, determine if they want to "generate" (create new screens) or "edit" (modify existing). Reply with intent only.`;
 
@@ -113,7 +288,6 @@ export async function POST(req: Request) {
               },
             });
 
-            // Step 2: planScreens (only when generating)
             let screens: Array<{ name: string; description: string }> = [];
             if (intent === "generate") {
               const screensPlan = await generateObject({
@@ -139,8 +313,6 @@ export async function POST(req: Request) {
                 stepId: "planScreens",
               },
             });
-
-            // Step 3: planStyle
             const stylePlan = await generateObject({
               model: vertex("gemini-2.0-flash"),
               schema: z.object({
@@ -170,6 +342,15 @@ export async function POST(req: Request) {
           }
         }
 
+        const createScreenStreamState = new Map<
+          string,
+          { buffer: string; lastEmit: number; lastHtmlLen: number }
+        >();
+        const updateScreenStreamState = new Map<
+          string,
+          { buffer: string; lastEmit: number }
+        >();
+
         const sleekTools = {
           read_screen: tool({
             description:
@@ -193,48 +374,150 @@ export async function POST(req: Request) {
               name: z.string().describe("Screen label/name"),
               screen_html: z.string().describe("HTML for body content only"),
             }),
-            execute: async ({
-              name,
-              screen_html,
-            }: {
-              name: string;
-              screen_html: string;
-            }) => {
-              let html = screen_html;
-              for (const [id, url] of Object.entries(imageMap)) {
-                html = html.replace(new RegExp(`placeholder:${id}`, "g"), url);
-              }
+            onInputStart: ({ toolCallId }) => {
+              createScreenStreamState.set(toolCallId, {
+                buffer: "",
+                lastEmit: 0,
+                lastHtmlLen: 0,
+              });
               const lastFrame = frames[frames.length - 1];
               const left = lastFrame ? lastFrame.left + FRAME_SPACING : 0;
               const top = lastFrame ? lastFrame.top : 0;
-              const frameId = String(Date.now());
-              const wrappedHtml = wrapScreenBody(html, theme);
+              const frameId = toolCallId;
               frames.push({
                 id: frameId,
-                label: name,
+                label: "Loading…",
                 left,
                 top,
-                html: wrappedHtml,
+                html: "",
               });
-
               writer.write({
                 type: "data-frame-action",
                 data: {
                   action: "add",
                   payload: {
                     id: frameId,
-                    label: name,
+                    label: "Loading…",
                     left,
                     top,
-                    html: wrappedHtml,
+                    html: "",
                   },
                 },
                 transient: true,
               });
-
+            },
+            onInputDelta: ({ toolCallId, inputTextDelta }) => {
+              console.log(toolCallId, inputTextDelta);
+              const state = createScreenStreamState.get(toolCallId);
+              if (!state) return;
+              state.buffer += inputTextDelta;
+              const now = Date.now();
+              if (now - state.lastEmit < STREAM_THROTTLE_MS) return;
+              const frame = frames.find((f) => f.id === toolCallId);
+              if (!frame) return;
+              let changed = false;
+              const parsed = parseCreateScreenPartial(state.buffer);
+              if (parsed) {
+                if (
+                  typeof parsed.name === "string" &&
+                  parsed.name !== frame.label
+                ) {
+                  frame.label = parsed.name;
+                  changed = true;
+                }
+                if (
+                  typeof parsed.screen_html === "string" &&
+                  parsed.screen_html.length > 0
+                ) {
+                  const wrappedHtml = wrapScreenBody(parsed.screen_html, theme);
+                  frame.html = wrappedHtml;
+                  state.lastHtmlLen = parsed.screen_html.length;
+                  changed = true;
+                }
+              }
+              if (!changed) {
+                const partialHtml = extractPartialScreenHtml(state.buffer);
+                if (
+                  typeof partialHtml === "string" &&
+                  partialHtml.length > state.lastHtmlLen
+                ) {
+                  const wrappedHtml = wrapScreenBody(partialHtml, theme);
+                  frame.html = wrappedHtml;
+                  state.lastHtmlLen = partialHtml.length;
+                  changed = true;
+                }
+              }
+              if (changed) {
+                state.lastEmit = now;
+                writer.write({
+                  type: "data-frame-action",
+                  data: {
+                    action: "updateFrame",
+                    payload: {
+                      id: toolCallId,
+                      html: frame.html,
+                      label: frame.label,
+                    },
+                  },
+                  transient: true,
+                });
+              }
+            },
+            execute: async (
+              { name, screen_html }: { name: string; screen_html: string },
+              { toolCallId },
+            ) => {
+              let html = screen_html;
+              for (const [id, url] of Object.entries(imageMap)) {
+                html = html.replace(new RegExp(`placeholder:${id}`, "g"), url);
+              }
+              const wrappedHtml = wrapScreenBody(html, theme);
+              const frame = frames.find((f) => f.id === toolCallId);
+              if (frame) {
+                frame.label = name;
+                frame.html = wrappedHtml;
+                writer.write({
+                  type: "data-frame-action",
+                  data: {
+                    action: "updateFrame",
+                    payload: {
+                      id: toolCallId,
+                      html: wrappedHtml,
+                      label: name,
+                    },
+                  },
+                  transient: true,
+                });
+              } else {
+                const lastFrame = frames[frames.length - 1];
+                const left = lastFrame ? lastFrame.left + FRAME_SPACING : 0;
+                const top = lastFrame ? lastFrame.top : 0;
+                frames.push({
+                  id: toolCallId,
+                  label: name,
+                  left,
+                  top,
+                  html: wrappedHtml,
+                });
+                writer.write({
+                  type: "data-frame-action",
+                  data: {
+                    action: "add",
+                    payload: {
+                      id: toolCallId,
+                      label: name,
+                      left,
+                      top,
+                      html: wrappedHtml,
+                    },
+                  },
+                  transient: true,
+                });
+              }
+              createScreenStreamState.delete(toolCallId);
               return {
                 success: true,
-                id: frameId,
+                id: toolCallId,
                 message: `Created screen "${name}"`,
               };
             },
@@ -246,13 +529,46 @@ export async function POST(req: Request) {
               id: z.string().describe("Frame id"),
               screen_html: z.string().describe("HTML for body content only"),
             }),
-            execute: async ({
-              id,
-              screen_html,
-            }: {
-              id: string;
-              screen_html: string;
-            }) => {
+            onInputStart: ({ toolCallId }) => {
+              updateScreenStreamState.set(toolCallId, {
+                buffer: "",
+                lastEmit: 0,
+              });
+            },
+            onInputDelta: ({ toolCallId, inputTextDelta }) => {
+              console.log(toolCallId, inputTextDelta);
+              const state = updateScreenStreamState.get(toolCallId);
+              if (!state) return;
+              state.buffer += inputTextDelta;
+              const now = Date.now();
+              if (now - state.lastEmit < STREAM_THROTTLE_MS) return;
+              const parsed = parseUpdateScreenPartial(state.buffer);
+              if (!parsed?.id || !parsed.screen_html) return;
+              const frame = frames.find((f) => f.id === parsed.id);
+              if (!frame) return;
+              const wrappedHtml = wrapScreenBody(parsed.screen_html, theme);
+              frame.html = wrappedHtml;
+              state.lastEmit = now;
+              writer.write({
+                type: "data-frame-action",
+                data: {
+                  action: "updateHtml",
+                  payload: { id: parsed.id, html: wrappedHtml },
+                },
+                transient: true,
+              });
+            },
+            execute: async (
+              {
+                id,
+                screen_html,
+              }: {
+                id: string;
+                screen_html: string;
+              },
+              { toolCallId },
+            ) => {
+              updateScreenStreamState.delete(toolCallId);
               let html = screen_html;
               for (const [imgId, url] of Object.entries(imageMap)) {
                 html = html.replace(
@@ -340,57 +656,26 @@ export async function POST(req: Request) {
               return { success: true };
             },
           }),
-          create_theme: tool({
-            description:
-              'Creates/sets the global theme. Pass theme_json as a JSON object string with CSS variables. Example: {"--primary":"#2563eb","--background":"#0f172a","--foreground":"#f8fafc","--card":"#1e293b","--radius":"0.5rem"}. Keys must include -- prefix. Never abbreviate.',
-            inputSchema: z.object({
-              theme_json: z
-                .string()
-                .describe(
-                  'JSON string: object with --prefixed keys to color/length values, e.g. {"--primary":"#2563eb","--background":"#fff"}',
-                ),
-            }),
-            execute: async ({ theme_json }: { theme_json: string }) => {
-              let themeVars: Record<string, string> = {};
-              try {
-                const parsed = JSON.parse(theme_json);
-                if (parsed && typeof parsed === "object") {
-                  for (const [k, v] of Object.entries(parsed)) {
-                    if (typeof v === "string") themeVars[k] = v;
-                  }
-                }
-              } catch {
-                return { success: false, error: "Invalid theme_json" };
-              }
-              const normalized = normalizeThemeVars(themeVars);
-              for (const k of Object.keys(theme)) delete theme[k];
-              for (const [k, v] of Object.entries(normalized)) {
-                theme[k] = v;
-              }
-              writer.write({
-                type: "data-frame-action",
-                data: {
-                  action: "replaceTheme",
-                  payload: { theme: { ...theme } },
-                },
-                transient: true,
-              });
-              return { success: true };
-            },
-          }),
           build_theme: tool({
             description:
-              "Builds the global theme from user description. Replaces the entire theme. Use when the user describes a theme (e.g. 'dark blue', 'minimal light'). Provide theme_vars with all CSS variables. Prefer create_theme for direct theme object.",
+              "Creates or replaces the global theme. Pass theme_vars as an object: CSS variable names (with --) to values. Use for initial theme creation.",
             inputSchema: z.object({
               description: z.string().optional(),
               theme_vars: z.record(z.string(), z.string()),
             }),
             execute: async ({
-              theme_vars,
+              theme_vars = {},
             }: {
               description?: string;
-              theme_vars: Record<string, string>;
+              theme_vars?: Record<string, string>;
             }) => {
+              if (!theme_vars || typeof theme_vars !== "object") {
+                return {
+                  success: false,
+                  error:
+                    'theme_vars is required. Pass an object like {"--primary":"#2563eb","--background":"#0f172a"}',
+                };
+              }
               const normalized = normalizeThemeVars(theme_vars);
               for (const k of Object.keys(theme)) delete theme[k];
               for (const [k, v] of Object.entries(normalized)) {
@@ -527,7 +812,7 @@ export async function POST(req: Request) {
             (Array.isArray(m.content) && m.content.length > 0),
         );
         const hasContent = validMessages.length > 0;
-        const messagesToSend =
+        const messagesToSend: ModelMessage[] =
           !hasContent || validMessages.length === 0
             ? [
                 ...validMessages,
@@ -538,22 +823,430 @@ export async function POST(req: Request) {
               ]
             : validMessages;
 
-        const result = streamText({
-          model: vertex("gemini-3-pro-preview"),
-          system: getSystemPrompt(frames, theme, planContext),
-          messages: messagesToSend,
-          tools: sleekTools,
-          stopWhen: stepCountIs(10),
-          providerOptions: {
-            vertex: {
-              thinkingConfig: {
-                includeThoughts: true,
-              },
+        const systemPrompt = getSystemPrompt(frames, theme, planContext);
+        const genaiContents = modelMessagesToGenAIContents(messagesToSend);
+        if (genaiContents.length === 0) {
+          genaiContents.push({
+            role: "user",
+            parts: [{ text: userPrompt?.trim() || "Hello" }],
+          });
+        }
+
+        const genaiModelId = "gemini-3-pro-preview";
+        // Disable streaming of function args — Gemini 3 + thinking was delivering empty args;
+        // non-streaming returns complete fc.args in one chunk.
+        const genaiConfig = {
+          tools: [{ functionDeclarations: GENAI_FUNCTION_DECLARATIONS }],
+          toolConfig: {
+            functionCallingConfig: {
+              mode: FunctionCallingConfigMode.AUTO,
             },
           },
-        });
+          generationConfig: {
+            maxOutputTokens: 32768,
+          },
+          thinkingConfig: {
+            includeThoughts: true,
+          },
+        };
 
-        writer.merge(result.toUIMessageStream());
+        const generateId = () => crypto.randomUUID();
+        let contents: typeof genaiContents = [...genaiContents];
+        const MAX_STEPS = 10;
+
+        writer.write({
+          type: "start",
+          messageId: generateId(),
+        });
+        writer.write({ type: "start-step" });
+
+        for (let step = 0; step < MAX_STEPS; step++) {
+          const stream = await getGenAI().models.generateContentStream({
+            model: "gemini-3-pro-preview",
+            contents,
+            config: {
+              systemInstruction: systemPrompt,
+              ...genaiConfig,
+            },
+          });
+
+          let textBuffer = "";
+          let reasoningBuffer = "";
+          let reasoningId: string | null = null;
+          let textId: string | null = null;
+          const textPartId = step === 0 ? "genai-text" : `genai-text-${step}`;
+          const functionCalls: Array<{
+            name: string;
+            args: Record<string, unknown>;
+            id?: string;
+            thoughtSignature?: string;
+          }> = [];
+          let streamingCall: {
+            toolCallId: string;
+            name: string;
+            args: Record<string, unknown>;
+            thoughtSignature?: string;
+          } | null = null;
+
+          for await (const chunk of stream) {
+            const parts = chunk.candidates?.[0]?.content?.parts ?? [];
+            for (const part of parts) {
+              if ("text" in part && part.text) {
+                if ("thought" in part && part.thought) {
+                  if (!reasoningId) {
+                    reasoningId = generateId();
+                    writer.write({
+                      type: "reasoning-start",
+                      id: reasoningId,
+                    });
+                  }
+                  reasoningBuffer += part.text;
+                  writer.write({
+                    type: "reasoning-delta",
+                    id: reasoningId!,
+                    delta: part.text,
+                  });
+                } else {
+                  if (!textId) {
+                    textId = textPartId;
+                    writer.write({ type: "text-start", id: textPartId });
+                  }
+                  textBuffer += part.text;
+                  writer.write({
+                    type: "text-delta",
+                    id: textPartId,
+                    delta: part.text,
+                  });
+                }
+              }
+              if ("functionCall" in part && part.functionCall) {
+                const fc = part.functionCall as {
+                  name?: string;
+                  args?: Record<string, unknown>;
+                  partialArgs?: Array<{
+                    jsonPath?: string;
+                    stringValue?: string;
+                    numberValue?: number;
+                    boolValue?: boolean;
+                    nullValue?: unknown;
+                    willContinue?: boolean;
+                  }>;
+                  willContinue?: boolean;
+                };
+                const thoughtSig = (part as { thoughtSignature?: string })
+                  .thoughtSignature;
+                const name = fc.name?.trim() || "";
+                if (!name || name === "unknown") continue;
+                const hasPartial =
+                  Array.isArray(fc.partialArgs) && fc.partialArgs.length > 0;
+                const isStreaming = hasPartial || fc.willContinue;
+
+                if (isStreaming) {
+                  if (!streamingCall) {
+                    const toolCallId = generateId();
+                    streamingCall = {
+                      toolCallId,
+                      name,
+                      args: {},
+                      thoughtSignature: thoughtSig,
+                    };
+                    writer.write({
+                      type: "tool-input-start",
+                      toolCallId,
+                      toolName: name,
+                    });
+                    if (name === "create_screen") {
+                      createScreenStreamState.set(toolCallId, {
+                        buffer: "",
+                        lastEmit: 0,
+                        lastHtmlLen: 0,
+                      });
+                      const lastFrame = frames[frames.length - 1];
+                      const left = lastFrame
+                        ? lastFrame.left + FRAME_SPACING
+                        : 0;
+                      const top = lastFrame ? lastFrame.top : 0;
+                      frames.push({
+                        id: toolCallId,
+                        label: "Loading…",
+                        left,
+                        top,
+                        html: "",
+                      });
+                      writer.write({
+                        type: "data-frame-action",
+                        data: {
+                          action: "add",
+                          payload: {
+                            id: toolCallId,
+                            label: "Loading…",
+                            left,
+                            top,
+                            html: "",
+                          },
+                        },
+                        transient: true,
+                      });
+                    } else if (name === "update_screen") {
+                      updateScreenStreamState.set(toolCallId, {
+                        buffer: "",
+                        lastEmit: 0,
+                      });
+                    }
+                  }
+                  if (streamingCall && thoughtSig) {
+                    streamingCall.thoughtSignature = thoughtSig;
+                  }
+                  if (streamingCall && hasPartial) {
+                    mergePartialArgs(streamingCall.args, fc.partialArgs!);
+                    const argsJson = JSON.stringify(streamingCall.args);
+                    writer.write({
+                      type: "tool-input-delta",
+                      toolCallId: streamingCall.toolCallId,
+                      inputTextDelta: argsJson,
+                    });
+                    if (streamingCall.name === "create_screen") {
+                      const state = createScreenStreamState.get(
+                        streamingCall.toolCallId,
+                      );
+                      if (state) {
+                        state.buffer = argsJson;
+                        const now = Date.now();
+                        if (now - state.lastEmit >= STREAM_THROTTLE_MS) {
+                          const frame = frames.find(
+                            (f) => f.id === streamingCall!.toolCallId,
+                          );
+                          if (frame) {
+                            const parsed = parseCreateScreenPartial(
+                              state.buffer,
+                            );
+                            if (parsed?.name) frame.label = parsed.name;
+                            if (
+                              typeof parsed?.screen_html === "string" &&
+                              parsed.screen_html
+                            ) {
+                              frame.html = wrapScreenBody(
+                                parsed.screen_html,
+                                theme,
+                              );
+                              state.lastHtmlLen = parsed.screen_html.length;
+                            } else {
+                              const partialHtml = extractPartialScreenHtml(
+                                state.buffer,
+                              );
+                              if (
+                                partialHtml &&
+                                partialHtml.length > state.lastHtmlLen
+                              ) {
+                                frame.html = wrapScreenBody(partialHtml, theme);
+                                state.lastHtmlLen = partialHtml.length;
+                              }
+                            }
+                            state.lastEmit = now;
+                            writer.write({
+                              type: "data-frame-action",
+                              data: {
+                                action: "updateFrame",
+                                payload: {
+                                  id: streamingCall.toolCallId,
+                                  html: frame.html,
+                                  label: frame.label,
+                                },
+                              },
+                              transient: true,
+                            });
+                          }
+                        }
+                      }
+                    } else if (streamingCall.name === "update_screen") {
+                      const state = updateScreenStreamState.get(
+                        streamingCall.toolCallId,
+                      );
+                      if (state) {
+                        state.buffer = argsJson;
+                        const now = Date.now();
+                        if (now - state.lastEmit >= STREAM_THROTTLE_MS) {
+                          const parsed = parseUpdateScreenPartial(state.buffer);
+                          if (parsed?.id && parsed?.screen_html) {
+                            const frame = frames.find(
+                              (f) => f.id === parsed.id,
+                            );
+                            if (frame) {
+                              frame.html = wrapScreenBody(
+                                parsed.screen_html,
+                                theme,
+                              );
+                              state.lastEmit = now;
+                              writer.write({
+                                type: "data-frame-action",
+                                data: {
+                                  action: "updateHtml",
+                                  payload: { id: parsed.id, html: frame.html },
+                                },
+                                transient: true,
+                              });
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                  if (!fc.willContinue && streamingCall) {
+                    if (fc.args && Object.keys(fc.args).length > 0) {
+                      Object.assign(streamingCall.args, fc.args);
+                    }
+                    writer.write({
+                      type: "tool-input-available",
+                      toolCallId: streamingCall.toolCallId,
+                      toolName: streamingCall.name,
+                      input: streamingCall.args,
+                    });
+                    functionCalls.push({
+                      name: streamingCall.name,
+                      args: streamingCall.args,
+                      id: streamingCall.toolCallId,
+                      thoughtSignature:
+                        thoughtSig ?? streamingCall.thoughtSignature,
+                    });
+                    streamingCall = null;
+                  }
+                } else {
+                  const args = fc.args ?? {};
+                  const toolCallId = generateId();
+                  functionCalls.push({
+                    name,
+                    args,
+                    id: toolCallId,
+                    thoughtSignature: thoughtSig,
+                  });
+                  writer.write({
+                    type: "tool-input-start",
+                    toolCallId,
+                    toolName: name,
+                  });
+                  writer.write({
+                    type: "tool-input-delta",
+                    toolCallId,
+                    inputTextDelta: JSON.stringify(args),
+                  });
+                  writer.write({
+                    type: "tool-input-available",
+                    toolCallId,
+                    toolName: name,
+                    input: args,
+                  });
+                }
+              }
+            }
+          }
+
+          if (streamingCall) {
+            writer.write({
+              type: "tool-input-available",
+              toolCallId: streamingCall.toolCallId,
+              toolName: streamingCall.name,
+              input: streamingCall.args,
+            });
+            functionCalls.push({
+              name: streamingCall.name,
+              args: streamingCall.args,
+              id: streamingCall.toolCallId,
+              thoughtSignature: streamingCall.thoughtSignature,
+            });
+          }
+
+          if (reasoningId) {
+            writer.write({ type: "reasoning-end", id: reasoningId });
+          }
+          if (textId) {
+            writer.write({ type: "text-end", id: textPartId });
+          }
+
+          if (functionCalls.length === 0) {
+            writer.write({ type: "finish-step" });
+            break;
+          }
+
+          const toolResultsToAdd: Content[] = [];
+          for (const fc of functionCalls) {
+            const t = sleekTools[fc.name as keyof typeof sleekTools];
+            if (!t?.execute) continue;
+            try {
+              const result = await (
+                t as unknown as {
+                  execute: (
+                    a: unknown,
+                    o: { toolCallId: string; messages: ModelMessage[] },
+                  ) => Promise<unknown>;
+                }
+              ).execute(fc.args, {
+                toolCallId: fc.id!,
+                messages: messagesToSend,
+              });
+              writer.write({
+                type: "tool-output-available",
+                toolCallId: fc.id!,
+                output: result,
+              });
+              toolResultsToAdd.push({
+                role: "user",
+                parts: [
+                  {
+                    functionResponse: {
+                      name: fc.name,
+                      response: { result },
+                    },
+                  },
+                ],
+              });
+            } catch (err) {
+              writer.write({
+                type: "tool-output-error",
+                toolCallId: fc.id!,
+                errorText: err instanceof Error ? err.message : "Tool error",
+              });
+              toolResultsToAdd.push({
+                role: "user",
+                parts: [
+                  {
+                    functionResponse: {
+                      name: fc.name,
+                      response: {
+                        error:
+                          err instanceof Error ? err.message : "Tool error",
+                      },
+                    },
+                  },
+                ],
+              });
+            }
+          }
+
+          const executedCalls = functionCalls.filter(
+            (fc) => sleekTools[fc.name as keyof typeof sleekTools]?.execute,
+          );
+          contents = [
+            ...contents,
+            {
+              role: "model",
+              parts: executedCalls.map((fc) => {
+                const part: {
+                  functionCall: { name: string; args: Record<string, unknown> };
+                  thoughtSignature: string;
+                } = {
+                  functionCall: { name: fc.name, args: fc.args },
+                  thoughtSignature:
+                    fc.thoughtSignature ?? "skip_thought_signature_validator",
+                };
+                return part;
+              }),
+            },
+            ...toolResultsToAdd,
+          ];
+          writer.write({ type: "finish-step" });
+        }
+
+        writer.write({ type: "finish", finishReason: "stop" });
       },
     });
 

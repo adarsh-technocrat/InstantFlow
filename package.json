@@ -4,16 +4,23 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:generate": "prisma generate",
+    "db:push": "dotenv -e .env.local -- prisma db push",
+    "db:migrate": "dotenv -e .env.local -- prisma migrate dev",
+    "db:studio": "dotenv -e .env.local -- prisma studio"
   },
   "dependencies": {
-    "@ai-sdk/google-vertex": "^4.0.59",
+    "@ai-sdk/google-vertex": "^4.0.61",
     "@ai-sdk/react": "^3.0.93",
+    "@google/genai": "^1.42.0",
+    "@radix-ui/react-dialog": "^1.1.15",
     "@reduxjs/toolkit": "^2.11.2",
     "ai": "^6.0.90",
     "clsx": "^2.1.1",
+    "dotenv": "^17.3.1",
     "js-beautify": "^1.15.4",
     "lucide-react": "^0.574.0",
     "next": "16.1.6",
@@ -22,16 +29,20 @@
     "react-markdown": "^10.0.0",
     "react-redux": "^9.2.0",
     "shiki": "^3.22.0",
-    "sonner": "^2.0.7"
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
+    "@prisma/client": "^6.19.2",
     "@tailwindcss/postcss": "^4",
     "@types/js-beautify": "^1.14.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv-cli": "^7.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "prisma": "^6.19.2",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

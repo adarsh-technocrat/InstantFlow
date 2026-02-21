@@ -10,8 +10,8 @@ import {
 } from "@/hooks/useFrameInteraction";
 import { FRAME_WIDTH, FRAME_HEIGHT } from "@/lib/canvas-utils";
 
-export const PHONE_CLIP_PATH =
-  'path("M 334 0 c 45.255 0 67.882 0 81.941 14.059 c 14.059 14.059 14.059 36.686 14.059 81.941 L 430 836 c 0 45.255 0 67.882 -14.059 81.941 c -14.059 14.059 -36.686 14.059 -81.941 14.059 L 96 932 c -45.255 0 -67.882 0 -81.941 -14.059 c -14.059 -14.059 -14.059 -36.686 -14.059 -81.941 L 0 96 c 0 -45.255 0 -67.882 14.059 -81.941 c 14.059 -14.059 36.686 -14.059 81.941 -14.059 Z")';
+const PHONE_PATH_D =
+  "M 334 0 c 45.255 0 67.882 0 81.941 14.059 c 14.059 14.059 14.059 36.686 14.059 81.941 L 430 836 c 0 45.255 0 67.882 -14.059 81.941 c -14.059 14.059 -36.686 14.059 -81.941 14.059 L 96 932 c -45.255 0 -67.882 0 -81.941 -14.059 c -14.059 -14.059 -14.059 -36.686 -14.059 -81.941 L 0 96 c 0 -45.255 0 -67.882 14.059 -81.941 c 14.059 -14.059 36.686 -14.059 81.941 -14.059 Z";
 
 function ResizeHandleDot({
   corner,
@@ -39,6 +39,37 @@ function ResizeHandleDot({
       onPointerDown={(e) => {
         e.stopPropagation();
         onPointerDown(e, corner);
+      }}
+      aria-hidden
+    />
+  );
+}
+
+function ResizeHandleEdge({
+  edge,
+  onPointerDown,
+}: {
+  edge: "n" | "s" | "e" | "w";
+  onPointerDown: (e: React.PointerEvent, edge: ResizeHandle) => void;
+}) {
+  const cursor = edge === "n" || edge === "s" ? "ns-resize" : "ew-resize";
+  const position =
+    edge === "n"
+      ? "left-0 right-0 top-0 -translate-y-1/2"
+      : edge === "s"
+        ? "left-0 right-0 bottom-0 translate-y-1/2"
+        : edge === "e"
+          ? "right-0 top-0 bottom-0 translate-x-1/2"
+          : "left-0 top-0 bottom-0 -translate-x-1/2";
+
+  return (
+    <div
+      className={`absolute z-50 shrink-0 rounded-sm border-2 border-white bg-frame-hover-border shadow-md ${position} ${edge === "n" || edge === "s" ? "h-2" : "w-2"} min-w-2 min-h-2`}
+      style={{ cursor }}
+      data-resize-handle={edge}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        onPointerDown(e, edge);
       }}
       aria-hidden
     />
@@ -115,7 +146,6 @@ export function Frame({
     isDragging,
     zoomModifierHeld,
     wheelOverlayRef,
-    uniformScale,
     handleContentPointerDown,
     handlePointerDown,
     handlePointerMove,
@@ -154,13 +184,22 @@ export function Frame({
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
     >
+      <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden>
+        <defs>
+          <clipPath
+            id={`frame-phone-clip-${id}`}
+            clipPathUnits="objectBoundingBox"
+            transform={`scale(${1 / FRAME_WIDTH}, ${1 / FRAME_HEIGHT})`}
+          >
+            <path d={PHONE_PATH_D} />
+          </clipPath>
+        </defs>
+      </svg>
       <div
         className="absolute inset-0 isolate will-change-transform filter-[drop-shadow(0_0_2px_rgb(212_212_216))] dark:filter-[drop-shadow(0_0_2px_rgb(113_113_122))]"
         style={{
-          width: FRAME_WIDTH,
-          height: FRAME_HEIGHT,
-          transform: `scale(${uniformScale})`,
-          transformOrigin: "top left",
+          width: `${width}px`,
+          height: `${height}px`,
         }}
       >
         <div
@@ -169,7 +208,7 @@ export function Frame({
             backgroundColor: "#0d0807",
             transform: "translateZ(0px)",
             backfaceVisibility: "hidden",
-            clipPath: PHONE_CLIP_PATH,
+            clipPath: `url(#frame-phone-clip-${id})`,
           }}
           {...(onWheelForZoom && { "data-frame-zoom": "true" })}
           onPointerDown={handleContentPointerDown}
@@ -213,6 +252,10 @@ export function Frame({
             corner="se"
             onPointerDown={handleResizePointerDown}
           />
+          <ResizeHandleEdge edge="n" onPointerDown={handleResizePointerDown} />
+          <ResizeHandleEdge edge="s" onPointerDown={handleResizePointerDown} />
+          <ResizeHandleEdge edge="e" onPointerDown={handleResizePointerDown} />
+          <ResizeHandleEdge edge="w" onPointerDown={handleResizePointerDown} />
           <FrameToolbar
             label={label}
             html={html}
@@ -235,7 +278,9 @@ export function Frame({
           className="flex cursor-grab items-center gap-1 truncate"
           style={{ width: 239.244 }}
         >
-          <DragHandleIcon />
+          <span data-drag-handle className="cursor-grab">
+            <DragHandleIcon />
+          </span>
           <div className="min-w-18 flex flex-1 flex-col gap-2 truncate">
             <div
               className="relative inline-block min-w-0 cursor-default select-none truncate rounded border border-transparent py-0 text-sm hover:text-(--foreground-muted)"

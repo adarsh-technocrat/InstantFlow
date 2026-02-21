@@ -7,6 +7,7 @@ import { Frame } from "@/components/Frame";
 import { FramePreview } from "@/components/FramePreview";
 import { useCanvas } from "@/hooks/useCanvas";
 import { useCanvasInteraction } from "@/hooks/useCanvasInteraction";
+import { useAppSelector } from "@/store/hooks";
 
 export function Canvas() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -56,6 +57,7 @@ export function Canvas() {
     [updateFrameProperties, persistFramePosition],
   );
 
+  const canvasToolMode = useAppSelector((s) => s.ui.canvasToolMode);
   const {
     isPanning,
     isMarquee,
@@ -77,6 +79,7 @@ export function Canvas() {
     setSelectedFrameIds,
     toggleFrameSelectionState,
     zoomCanvasAtCursorPosition,
+    canvasToolMode,
   });
 
   useEffect(() => {

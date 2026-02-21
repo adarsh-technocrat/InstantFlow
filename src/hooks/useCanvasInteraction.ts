@@ -8,10 +8,12 @@ import {
   FRAME_HEIGHT,
 } from "@/lib/canvas-utils";
 import type { CanvasTransform } from "@/store/slices/canvasSlice";
+import type { CanvasToolMode } from "@/store/slices/uiSlice";
 
 const ZOOM_SETTLE_MS = 250;
 
 export interface UseCanvasInteractionProps {
+  canvasToolMode?: CanvasToolMode;
   containerRef: React.RefObject<HTMLDivElement | null>;
   transform: CanvasTransform;
   frames: {
@@ -41,6 +43,7 @@ export function useCanvasInteraction({
   setSelectedFrameIds,
   toggleFrameSelectionState,
   zoomCanvasAtCursorPosition,
+  canvasToolMode = "select",
 }: UseCanvasInteractionProps) {
   const { x, y, scale } = transform;
   const panStart = useRef<{
@@ -152,10 +155,16 @@ export function useCanvasInteraction({
     };
   }, []);
 
+  const effectiveSpaceHeld = spaceHeld || canvasToolMode === "hand";
+
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0) return;
-      if ((e.target as Element).closest?.("[data-frame]")) return;
+      if (
+        (e.target as Element).closest?.("[data-frame]") &&
+        !effectiveSpaceHeld
+      )
+        return;
       const el = containerRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
@@ -168,7 +177,7 @@ export function useCanvasInteraction({
         scale,
       );
 
-      if (spaceHeld) {
+      if (effectiveSpaceHeld) {
         setSelectedFrameIds([]);
         panStart.current = {
           x: e.clientX,
@@ -185,7 +194,15 @@ export function useCanvasInteraction({
         (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
       }
     },
-    [transform.x, transform.y, x, y, scale, setSelectedFrameIds, spaceHeld],
+    [
+      transform.x,
+      transform.y,
+      x,
+      y,
+      scale,
+      setSelectedFrameIds,
+      effectiveSpaceHeld,
+    ],
   );
 
   const handlePointerMove = useCallback(
@@ -343,7 +360,7 @@ export function useCanvasInteraction({
     isPanning,
     isMarquee,
     isZooming,
-    spaceHeld,
+    spaceHeld: effectiveSpaceHeld,
     marqueeStartRef: marqueeStart,
     marqueeEnd,
     handlePointerDown,
