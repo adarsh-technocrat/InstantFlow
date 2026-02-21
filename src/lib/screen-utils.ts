@@ -40,6 +40,53 @@ export const SCREEN_HTML_TAIL = `</body></html>`;
 
 export type ThemeVariables = Record<string, string>;
 
+/** Map model abbreviations/typos to valid CSS variable names. */
+const THEME_KEY_ALIASES: Record<string, string> = {
+  r: "--primary",
+  y: "--secondary",
+  t: "--accent",
+  boarder: "--border",
+  primary: "--primary",
+  secondary: "--secondary",
+  background: "--background",
+  foreground: "--foreground",
+  card: "--card",
+  "card-foreground": "--card-foreground",
+  border: "--border",
+  radius: "--radius",
+  muted: "--muted",
+  "muted-foreground": "--muted-foreground",
+  "primary-foreground": "--primary-foreground",
+  "secondary-foreground": "--secondary-foreground",
+  input: "--input",
+  ring: "--ring",
+  accent: "--accent",
+  destructive: "--destructive",
+  "font-sans": "--font-sans",
+  "font-heading": "--font-heading",
+};
+
+/**
+ * Normalize raw theme vars from the model (which may use abbreviations like "r", "y"
+ * or missing "--" prefix) into valid ThemeVariables.
+ */
+export function normalizeThemeVars(
+  raw: Record<string, string>,
+): ThemeVariables {
+  const out: ThemeVariables = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (!v || typeof v !== "string") continue;
+    const key = k.trim();
+    if (!key) continue;
+    const normalized =
+      key.startsWith("--")
+        ? key
+        : THEME_KEY_ALIASES[key] ?? `--${key.replace(/^--/, "")}`;
+    out[normalized] = v;
+  }
+  return out;
+}
+
 const EMPTY_THEME_FALLBACK: ThemeVariables = {
   "--background": "#ffffff",
   "--foreground": "#000000",
@@ -61,6 +108,7 @@ const EMPTY_THEME_FALLBACK: ThemeVariables = {
 
 function themeVarsToCSS(vars: ThemeVariables): string {
   return Object.entries(vars)
+    .filter(([k]) => k.startsWith("--"))
     .map(([k, v]) => `        ${k}: ${v};`)
     .join("\n");
 }

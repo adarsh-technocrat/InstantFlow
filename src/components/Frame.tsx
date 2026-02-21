@@ -1,16 +1,17 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useRef } from "react";
 import { FrameToolbar } from "@/components/FrameToolbar";
+import {
+  useFrameInteraction,
+  type ResizeHandle,
+  MIN_FRAME_WIDTH,
+  MIN_FRAME_HEIGHT,
+} from "@/hooks/useFrameInteraction";
 import { FRAME_WIDTH, FRAME_HEIGHT } from "@/lib/canvas-utils";
 
 export const PHONE_CLIP_PATH =
   'path("M 334 0 c 45.255 0 67.882 0 81.941 14.059 c 14.059 14.059 14.059 36.686 14.059 81.941 L 430 836 c 0 45.255 0 67.882 -14.059 81.941 c -14.059 14.059 -36.686 14.059 -81.941 14.059 L 96 932 c -45.255 0 -67.882 0 -81.941 -14.059 c -14.059 -14.059 -14.059 -36.686 -14.059 -81.941 L 0 96 c 0 -45.255 0 -67.882 14.059 -81.941 c 14.059 -14.059 36.686 -14.059 81.941 -14.059 Z")';
-
-const MIN_FRAME_WIDTH = 120;
-const MIN_FRAME_HEIGHT = 250;
-
-type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
 function ResizeHandleDot({
   corner,
@@ -62,6 +63,7 @@ function DragHandleIcon() {
 export interface FrameProps {
   id: string;
   label: string;
+  html?: string;
   left: number;
   top?: number;
   width?: number;
@@ -78,12 +80,18 @@ export interface FrameProps {
     height?: number;
   }) => void;
   spaceHeld?: boolean;
+  onWheelForZoom?: (e: {
+    clientX: number;
+    clientY: number;
+    deltaY: number;
+  }) => void;
   children?: React.ReactNode;
 }
 
 export function Frame({
   id,
   label,
+  html = "",
   left,
   top = -500,
   width: widthProp,
@@ -95,157 +103,43 @@ export function Frame({
   onPositionChange,
   onSizeChange,
   spaceHeld = false,
+  onWheelForZoom,
   children,
 }: FrameProps) {
   const width = widthProp ?? FRAME_WIDTH;
   const height = heightProp ?? FRAME_HEIGHT;
-  const [isDragging, setIsDragging] = useState(false);
-  const [isResizing, setIsResizing] = useState(false);
-  const dragStart = useRef<{
-    clientX: number;
-    clientY: number;
-    left: number;
-    top: number;
-  } | null>(null);
-  const resizeStart = useRef<{
-    corner: ResizeHandle;
-    clientX: number;
-    clientY: number;
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-  } | null>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const showToolbar = showToolbarProp ?? selected;
 
-  /** Content area: select only, no drag. Lets iframe receive interaction when selected. */
-  const handleContentPointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      if (e.button !== 0) return;
-      e.stopPropagation();
-      onSelect?.(id, e.metaKey);
-    },
-    [onSelect, id],
-  );
-
-  /** Chrome (label, etc.): select and allow drag. */
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      if (e.button !== 0) return;
-      if (spaceHeld) return;
-      e.stopPropagation();
-      onSelect?.(id, e.metaKey);
-      dragStart.current = { clientX: e.clientX, clientY: e.clientY, left, top };
-      setIsDragging(true);
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    },
-    [onSelect, id, left, top, spaceHeld],
-  );
-
-  const handlePointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      const scale = canvasScale || 0.556382;
-      if (resizeStart.current && onSizeChange) {
-        const {
-          corner,
-          clientX,
-          clientY,
-          left,
-          top,
-          width: w,
-          height: h,
-        } = resizeStart.current;
-        const dx = (e.clientX - clientX) / scale;
-        const dy = (e.clientY - clientY) / scale;
-        let rawWidth: number;
-        let rawHeight: number;
-        if (corner === "se") {
-          rawWidth = w + dx;
-          rawHeight = h + dy;
-        } else if (corner === "sw") {
-          rawWidth = w - dx;
-          rawHeight = h + dy;
-        } else if (corner === "ne") {
-          rawWidth = w + dx;
-          rawHeight = h - dy;
-        } else {
-          rawWidth = w - dx;
-          rawHeight = h - dy;
-        }
-        const scaleX = Math.max(
-          MIN_FRAME_WIDTH / FRAME_WIDTH,
-          rawWidth / FRAME_WIDTH,
-        );
-        const scaleY = Math.max(
-          MIN_FRAME_HEIGHT / FRAME_HEIGHT,
-          rawHeight / FRAME_HEIGHT,
-        );
-        const uniformScale = Math.min(scaleX, scaleY);
-        const newWidth = uniformScale * FRAME_WIDTH;
-        const newHeight = uniformScale * FRAME_HEIGHT;
-        let newLeft = left;
-        let newTop = top;
-        if (corner === "sw" || corner === "nw") {
-          newLeft = left + (w - newWidth);
-        }
-        if (corner === "ne" || corner === "nw") {
-          newTop = top + (h - newHeight);
-        }
-        onSizeChange({
-          left: newLeft,
-          top: newTop,
-          width: newWidth,
-          height: newHeight,
-        });
-        return;
-      }
-      if (dragStart.current && onPositionChange) {
-        const dx = (e.clientX - dragStart.current.clientX) / scale;
-        const dy = (e.clientY - dragStart.current.clientY) / scale;
-        onPositionChange(
-          dragStart.current.left + dx,
-          dragStart.current.top + dy,
-        );
-      }
-    },
-    [canvasScale, onPositionChange, onSizeChange],
-  );
-
-  const handlePointerUp = useCallback((e: React.PointerEvent) => {
-    if (e.button !== 0) return;
-    dragStart.current = null;
-    resizeStart.current = null;
-    setIsDragging(false);
-    setIsResizing(false);
-    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-  }, []);
-
-  const frameRef = useRef<HTMLDivElement>(null);
-
-  const handleResizePointerDown = useCallback(
-    (e: React.PointerEvent, corner: ResizeHandle) => {
-      if (e.button !== 0 || !onSizeChange) return;
-      e.stopPropagation();
-      resizeStart.current = {
-        corner,
-        clientX: e.clientX,
-        clientY: e.clientY,
-        left,
-        top,
-        width,
-        height,
-      };
-      setIsResizing(true);
-      frameRef.current?.setPointerCapture(e.pointerId);
-    },
-    [left, top, width, height, onSizeChange],
-  );
-
-  const uniformScale = Math.min(width / FRAME_WIDTH, height / FRAME_HEIGHT);
+  const {
+    isDragging,
+    zoomModifierHeld,
+    wheelOverlayRef,
+    uniformScale,
+    handleContentPointerDown,
+    handlePointerDown,
+    handlePointerMove,
+    handlePointerUp,
+    handleResizePointerDown,
+  } = useFrameInteraction({
+    frameRef,
+    id,
+    left,
+    top,
+    width,
+    height,
+    canvasScale,
+    spaceHeld,
+    onSelect,
+    onPositionChange,
+    onSizeChange,
+    onWheelForZoom,
+  });
 
   return (
     <div
       ref={frameRef}
+      data-frame
       className={`absolute shrink-0 ${isDragging ? "cursor-grabbing" : ""}`}
       style={{
         left: `${left}px`,
@@ -277,19 +171,32 @@ export function Frame({
             backfaceVisibility: "hidden",
             clipPath: PHONE_CLIP_PATH,
           }}
+          {...(onWheelForZoom && { "data-frame-zoom": "true" })}
           onPointerDown={handleContentPointerDown}
         >
           {children ?? <div className="size-full" title="Canvas Frame" />}
+          {onWheelForZoom && (
+            <div
+              ref={wheelOverlayRef}
+              className="absolute inset-0 z-50"
+              style={{
+                pointerEvents: zoomModifierHeld ? "auto" : "none",
+              }}
+              aria-hidden
+            />
+          )}
         </div>
       </div>
       <div className="pointer-events-none absolute inset-0 z-40" />
 
       {showToolbar && (
         <>
-          <div
-            className="pointer-events-none absolute inset-0 z-30 rounded-none border-2 border-frame-hover-border"
-            aria-hidden
-          />
+          {!isDragging && (
+            <div
+              className="pointer-events-none absolute inset-0 z-30 rounded-none border-2 border-frame-hover-border"
+              aria-hidden
+            />
+          )}
           <ResizeHandleDot
             corner="nw"
             onPointerDown={handleResizePointerDown}
@@ -308,6 +215,7 @@ export function Frame({
           />
           <FrameToolbar
             label={label}
+            html={html}
             scale={1 / canvasScale}
             canvasScale={canvasScale}
           />

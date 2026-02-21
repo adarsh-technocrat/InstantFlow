@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  --container-5xl: 64rem;
   --background: #ffffff;
   --foreground: #171717;
   --background-secondary: #f4f4f5;
@@ -20,6 +21,7 @@
   --primary-foreground: #fafafa;
   --secondary: #f4f4f5;
   --secondary-foreground: #18181b;
+  --input: #f4f4f5;
 }
 
 @theme inline {
@@ -34,10 +36,11 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-muted-foreground: var(--muted-foreground);
-  --color-input: var(--background);
+  --color-input: var(--input);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --z-index-100: 100;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -56,6 +59,7 @@
     --primary-foreground: #fafafa;
     --secondary: #27272a;
     --secondary-foreground: #fafafa;
+    --input: #27272a;
     /* Layout glass – theme-aligned (dark) */
     --panel-glass-bg: rgba(24, 24, 27, 0.88);
     --panel-glass-border: rgba(39, 39, 42, 0.8);
@@ -67,6 +71,7 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  touch-action: pan-x pan-y;
 }
 
 .bg-panel-glass {
@@ -82,7 +87,6 @@ body {
   color: #fafafa;
 }
 
-/* Canvas layout panels – matches ChatPanel (#0d0807) */
 .bg-canvas-panel {
   background-color: #0d0807;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -94,4 +98,24 @@ body {
 }
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* Shiki dual theme – dark mode. Only the block gets background; spans stay transparent. */
+@media (prefers-color-scheme: dark) {
+  .shiki {
+    color: var(--shiki-dark) !important;
+    background-color: var(--shiki-dark-bg) !important;
+  }
+  .shiki span {
+    color: var(--shiki-dark) !important;
+    background-color: transparent !important;
+  }
+}
+
+
+.code-dialog-shiki.shiki,
+.code-dialog-shiki .shiki,
+.code-dialog-shiki .shiki span {
+  color: var(--shiki-dark) !important;
+  background-color: transparent !important;
 }

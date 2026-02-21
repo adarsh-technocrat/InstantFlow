@@ -24,7 +24,7 @@ export function FramePreview({
       body: JSON.stringify({ frameId, html }),
     })
       .then(() => setLoadKey((k) => k + 1))
-      .catch((e) => console.error("Frame sync error:", e));
+      .catch(() => {});
   }, [frameId, html]);
 
   const src = `/api/render?frameId=${encodeURIComponent(frameId)}&v=${encodeURIComponent(cacheKey)}&k=${loadKey}`;

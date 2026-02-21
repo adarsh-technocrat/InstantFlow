@@ -14,7 +14,6 @@ export async function POST(req: NextRequest) {
     frameStore.set(frameId, html);
     return NextResponse.json({ ok: true });
   } catch (e) {
-    console.error("Frames API error:", e);
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Unknown error" },
       { status: 500 },

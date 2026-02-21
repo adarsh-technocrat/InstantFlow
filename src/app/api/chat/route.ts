@@ -1,15 +1,22 @@
 import { createVertex } from "@ai-sdk/google-vertex";
 import {
   streamText,
+  generateObject,
+  generateImage,
   convertToModelMessages,
   tool,
   createUIMessageStream,
   createUIMessageStreamResponse,
   stepCountIs,
+  type ModelMessage,
 } from "ai";
 import { z } from "zod";
 import { getSystemPrompt } from "@/constants/agent-prompts";
-import { wrapScreenBody, extractBodyContent } from "@/lib/screen-utils";
+import {
+  wrapScreenBody,
+  extractBodyContent,
+  normalizeThemeVars,
+} from "@/lib/screen-utils";
 import type { ThemeVariables } from "@/lib/screen-utils";
 
 export const maxDuration = 30;
@@ -44,6 +51,12 @@ interface FrameState {
 
 const FRAME_SPACING = 420;
 
+const PLANNER_CLASSIFY_PROMPT = `Given a user request for a mobile app, determine if they want to "generate" (create new screens) or "edit" (modify existing). Reply with intent only.`;
+
+const PLANNER_SCREENS_PROMPT = `Given a user request and that intent is "generate", list the screens to create. Each screen has name and description.`;
+
+const PLANNER_STYLE_PROMPT = `Given a user request and the screens to create, provide visual guidelines (colors, mood, typography) and whether to generate (true for new designs).`;
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -66,16 +79,11 @@ export async function POST(req: Request) {
     }));
     const theme: ThemeVariables = { ...initialTheme };
 
-    const modelMessages =
-      rawMessages.length > 0 && hasParts(rawMessages[0])
-        ? await convertToModelMessages(rawMessages)
-        : rawMessages.map((m: { role: string; content: string }) => ({
-            role: m.role,
-            content: m.content ?? "",
-          }));
+    const isInitial = frames.length === 0 || Object.keys(theme).length === 0;
+    const imageMap: Record<string, string> = {};
 
     const stream = createUIMessageStream({
-      execute: ({ writer }) => {
+      execute: async ({ writer }) => {
         writer.write({
           type: "data-agent-status",
           data: {
@@ -85,34 +93,84 @@ export async function POST(req: Request) {
           transient: true,
         });
 
+        let planContext = "";
+        if (isInitial && userPrompt.trim()) {
+          try {
+            // Step 1: classifyIntent
+            const classify = await generateObject({
+              model: vertex("gemini-2.0-flash"),
+              schema: z.object({ intent: z.enum(["generate", "edit"]) }),
+              prompt: `${PLANNER_CLASSIFY_PROMPT}\n\nUser request:\n${userPrompt}`,
+            });
+            const intent = classify.object.intent;
+            writer.write({
+              type: "data-step-result",
+              id: "classifyIntent",
+              data: {
+                result: { intent },
+                status: "success",
+                stepId: "classifyIntent",
+              },
+            });
+
+            // Step 2: planScreens (only when generating)
+            let screens: Array<{ name: string; description: string }> = [];
+            if (intent === "generate") {
+              const screensPlan = await generateObject({
+                model: vertex("gemini-2.0-flash"),
+                schema: z.object({
+                  screens: z.array(
+                    z.object({
+                      name: z.string(),
+                      description: z.string(),
+                    }),
+                  ),
+                }),
+                prompt: `${PLANNER_SCREENS_PROMPT}\n\nUser request:\n${userPrompt}`,
+              });
+              screens = screensPlan.object.screens;
+            }
+            writer.write({
+              type: "data-step-result",
+              id: "planScreens",
+              data: {
+                result: { screens },
+                status: "success",
+                stepId: "planScreens",
+              },
+            });
+
+            // Step 3: planStyle
+            const stylePlan = await generateObject({
+              model: vertex("gemini-2.0-flash"),
+              schema: z.object({
+                guidelines: z.string(),
+                shouldGenerate: z.boolean(),
+              }),
+              prompt: `${PLANNER_STYLE_PROMPT}\n\nUser request:\n${userPrompt}\n\nScreens: ${JSON.stringify(screens)}\n\nOutput visual guidelines and whether to generate (true for new designs).`,
+            });
+            const { guidelines, shouldGenerate } = stylePlan.object;
+            writer.write({
+              type: "data-step-result",
+              id: "planStyle",
+              data: {
+                result: { guidelines, shouldGenerate },
+                status: "success",
+                stepId: "planStyle",
+              },
+            });
+
+            writer.write({
+              type: "data-step-start",
+              data: {},
+            });
+            planContext = `## Planning (from pipeline)\n- Intent: ${intent}\n- Screens to create: ${JSON.stringify(screens, null, 2)}\n- Visual guidelines: ${guidelines}\n`;
+          } catch {
+            // Planner failed, continuing without plan
+          }
+        }
+
         const sleekTools = {
-          step_analyzed_request: tool({
-            description:
-              "Call this AFTER you have analyzed the user's request. Confirm you understand: app type, features needed, target audience, any style hints. Must be the FIRST workflow step. Call before step_planned_screens.",
-            inputSchema: z.object({}),
-            execute: async () => ({
-              success: true,
-              message: "Request analyzed",
-            }),
-          }),
-          step_planned_screens: tool({
-            description:
-              "Call this AFTER you have planned which screens to create (e.g. Login, Home, Settings). Must be called after step_analyzed_request and before step_planned_visual_identity.",
-            inputSchema: z.object({}),
-            execute: async () => ({
-              success: true,
-              message: "Screens planned",
-            }),
-          }),
-          step_planned_visual_identity: tool({
-            description:
-              "Call this AFTER you have planned the visual identity — colors, mood, typography (e.g. dark blue, minimal, bold headings). Must be called after step_planned_screens and before build_theme.",
-            inputSchema: z.object({}),
-            execute: async () => ({
-              success: true,
-              message: "Visual identity planned",
-            }),
-          }),
           read_screen: tool({
             description:
               "Returns the current HTML of a screen. Call this before editing. id must be from the Current Screens table in the system context.",
@@ -130,7 +188,7 @@ export async function POST(req: Request) {
           }),
           create_screen: tool({
             description:
-              "Creates a new screen. screen_html is inner body content only (no html, head, or body tags).",
+              'Creates a new screen. screen_html is inner body content only (no html, head, or body tags). Use src="placeholder:{id}" for AI-generated images; call generate_image first with the same id.',
             inputSchema: z.object({
               name: z.string().describe("Screen label/name"),
               screen_html: z.string().describe("HTML for body content only"),
@@ -142,23 +200,43 @@ export async function POST(req: Request) {
               name: string;
               screen_html: string;
             }) => {
+              let html = screen_html;
+              for (const [id, url] of Object.entries(imageMap)) {
+                html = html.replace(new RegExp(`placeholder:${id}`, "g"), url);
+              }
               const lastFrame = frames[frames.length - 1];
               const left = lastFrame ? lastFrame.left + FRAME_SPACING : 0;
               const top = lastFrame ? lastFrame.top : 0;
-              const id = String(Date.now());
-              const html = wrapScreenBody(screen_html, theme);
-              frames.push({ id, label: name, left, top, html });
+              const frameId = String(Date.now());
+              const wrappedHtml = wrapScreenBody(html, theme);
+              frames.push({
+                id: frameId,
+                label: name,
+                left,
+                top,
+                html: wrappedHtml,
+              });
 
               writer.write({
                 type: "data-frame-action",
                 data: {
                   action: "add",
-                  payload: { id, label: name, left, top, html },
+                  payload: {
+                    id: frameId,
+                    label: name,
+                    left,
+                    top,
+                    html: wrappedHtml,
+                  },
                 },
                 transient: true,
               });
 
-              return { success: true, message: `Created screen "${name}"` };
+              return {
+                success: true,
+                id: frameId,
+                message: `Created screen "${name}"`,
+              };
             },
           }),
           update_screen: tool({
@@ -175,9 +253,16 @@ export async function POST(req: Request) {
               id: string;
               screen_html: string;
             }) => {
+              let html = screen_html;
+              for (const [imgId, url] of Object.entries(imageMap)) {
+                html = html.replace(
+                  new RegExp(`placeholder:${imgId}`, "g"),
+                  url,
+                );
+              }
               const frame = frames.find((f) => f.id === id);
               if (frame) {
-                frame.html = wrapScreenBody(screen_html, theme);
+                frame.html = wrapScreenBody(html, theme);
                 writer.write({
                   type: "data-frame-action",
                   data: {
@@ -255,27 +340,31 @@ export async function POST(req: Request) {
               return { success: true };
             },
           }),
-          build_theme: tool({
+          create_theme: tool({
             description:
-              "Builds the global theme from user description. Replaces the entire theme. Use when the user describes a theme (e.g. 'dark blue', 'minimal light', 'forest green'). Provide a complete theme with all required vars: --background, --foreground, --primary, --primary-foreground, --secondary, --secondary-foreground, --muted, --muted-foreground, --card, --card-foreground, --border, --input, --ring, --radius, --font-sans, --font-heading. No defaults - theme is built purely from the user prompt.",
+              'Creates/sets the global theme. Pass theme_json as a JSON object string with CSS variables. Example: {"--primary":"#2563eb","--background":"#0f172a","--foreground":"#f8fafc","--card":"#1e293b","--radius":"0.5rem"}. Keys must include -- prefix. Never abbreviate.',
             inputSchema: z.object({
-              description: z
+              theme_json: z
                 .string()
-                .describe("User's theme description/prompt"),
-              theme_vars: z
-                .record(z.string(), z.string())
                 .describe(
-                  "Complete theme as CSS variables. Keys like --primary, --background, etc.",
+                  'JSON string: object with --prefixed keys to color/length values, e.g. {"--primary":"#2563eb","--background":"#fff"}',
                 ),
             }),
-            execute: async ({
-              theme_vars,
-            }: {
-              description: string;
-              theme_vars: Record<string, string>;
-            }) => {
+            execute: async ({ theme_json }: { theme_json: string }) => {
+              let themeVars: Record<string, string> = {};
+              try {
+                const parsed = JSON.parse(theme_json);
+                if (parsed && typeof parsed === "object") {
+                  for (const [k, v] of Object.entries(parsed)) {
+                    if (typeof v === "string") themeVars[k] = v;
+                  }
+                }
+              } catch {
+                return { success: false, error: "Invalid theme_json" };
+              }
+              const normalized = normalizeThemeVars(themeVars);
               for (const k of Object.keys(theme)) delete theme[k];
-              for (const [k, v] of Object.entries(theme_vars)) {
+              for (const [k, v] of Object.entries(normalized)) {
                 theme[k] = v;
               }
               writer.write({
@@ -286,18 +375,173 @@ export async function POST(req: Request) {
                 },
                 transient: true,
               });
-              return {
-                success: true,
-                message: "Theme built from user prompt",
-              };
+              return { success: true };
+            },
+          }),
+          build_theme: tool({
+            description:
+              "Builds the global theme from user description. Replaces the entire theme. Use when the user describes a theme (e.g. 'dark blue', 'minimal light'). Provide theme_vars with all CSS variables. Prefer create_theme for direct theme object.",
+            inputSchema: z.object({
+              description: z.string().optional(),
+              theme_vars: z.record(z.string(), z.string()),
+            }),
+            execute: async ({
+              theme_vars,
+            }: {
+              description?: string;
+              theme_vars: Record<string, string>;
+            }) => {
+              const normalized = normalizeThemeVars(theme_vars);
+              for (const k of Object.keys(theme)) delete theme[k];
+              for (const [k, v] of Object.entries(normalized)) {
+                theme[k] = v;
+              }
+              writer.write({
+                type: "data-frame-action",
+                data: {
+                  action: "replaceTheme",
+                  payload: { theme: { ...theme } },
+                },
+                transient: true,
+              });
+              return { success: true, message: "Theme built" };
+            },
+          }),
+          generate_image: tool({
+            description:
+              'Generates an AI image. Call FIRST before create_screen/update_screen that uses it. In HTML use src="placeholder:{id}" to reference. aspect_ratio: square|landscape|portrait. background: opaque (photos) or transparent (icons).',
+            inputSchema: z.object({
+              id: z.string().describe("Placeholder id, e.g. img-1"),
+              prompt: z.string().describe("Detailed image description"),
+              aspect_ratio: z.enum(["square", "landscape", "portrait"]),
+              background: z.enum(["opaque", "transparent"]),
+            }),
+            execute: async ({
+              id,
+              prompt,
+              aspect_ratio,
+            }: {
+              id: string;
+              prompt: string;
+              aspect_ratio: string;
+              background: string;
+            }) => {
+              if (process.env.IMAGE_GEN_API_URL) {
+                try {
+                  const res = await fetch(process.env.IMAGE_GEN_API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      prompt,
+                      aspect_ratio,
+                      n: 1,
+                    }),
+                  });
+                  const data = await res.json();
+                  const url =
+                    data.url ?? data.data?.[0]?.url ?? data.output?.[0];
+                  if (url) {
+                    imageMap[id] = url;
+                    return { success: true, url };
+                  }
+                } catch {
+                  // Image gen failed
+                }
+              }
+              if (
+                process.env.GOOGLE_CLIENT_EMAIL &&
+                process.env.GOOGLE_PRIVATE_KEY
+              ) {
+                try {
+                  const aspectRatioMap = {
+                    square: "1:1" as const,
+                    landscape: "16:9" as const,
+                    portrait: "9:16" as const,
+                  };
+                  const aspectRatio =
+                    aspectRatioMap[
+                      aspect_ratio as keyof typeof aspectRatioMap
+                    ] ?? "1:1";
+                  const imageModel = vertex.image(
+                    "imagen-3.0-fast-generate-001",
+                  );
+                  const { image } = await generateImage({
+                    model: imageModel,
+                    prompt,
+                    n: 1,
+                    aspectRatio,
+                  });
+                  const dataUrl = `data:${image.mediaType};base64,${image.base64}`;
+                  imageMap[id] = dataUrl;
+                  return { success: true, url: dataUrl };
+                } catch {
+                  // Vertex image gen failed
+                }
+              }
+              const w =
+                aspect_ratio === "landscape"
+                  ? 1024
+                  : aspect_ratio === "portrait"
+                    ? 768
+                    : 512;
+              const h =
+                aspect_ratio === "landscape"
+                  ? 768
+                  : aspect_ratio === "portrait"
+                    ? 1024
+                    : 512;
+              imageMap[id] = `https://picsum.photos/seed/${id}/${w}/${h}`;
+              return { success: true, url: imageMap[id] };
             },
           }),
         };
 
+        const modelMessages =
+          rawMessages.length > 0 && rawMessages.some(hasParts)
+            ? await convertToModelMessages(rawMessages, {
+                tools: sleekTools,
+              })
+            : rawMessages.map(
+                (m: {
+                  role: string;
+                  content?: string;
+                  parts?: Array<{ type: string; text?: string }>;
+                }) => ({
+                  role: m.role,
+                  content:
+                    m.content ??
+                    (Array.isArray(m.parts)
+                      ? m.parts
+                          .filter(
+                            (p): p is { type: string; text: string } =>
+                              p.type === "text" && p.text != null,
+                          )
+                          .map((p) => p.text)
+                          .join("")
+                      : ""),
+                }),
+              );
+        const validMessages = modelMessages.filter(
+          (m: ModelMessage) =>
+            (typeof m.content === "string" && m.content.length > 0) ||
+            (Array.isArray(m.content) && m.content.length > 0),
+        );
+        const hasContent = validMessages.length > 0;
+        const messagesToSend =
+          !hasContent || validMessages.length === 0
+            ? [
+                ...validMessages,
+                {
+                  role: "user" as const,
+                  content: userPrompt?.trim() || "Hello",
+                },
+              ]
+            : validMessages;
+
         const result = streamText({
           model: vertex("gemini-3-pro-preview"),
-          system: getSystemPrompt(frames, theme),
-          messages: modelMessages,
+          system: getSystemPrompt(frames, theme, planContext),
+          messages: messagesToSend,
           tools: sleekTools,
           stopWhen: stepCountIs(10),
           providerOptions: {
@@ -315,7 +559,6 @@ export async function POST(req: Request) {
 
     return createUIMessageStreamResponse({ stream });
   } catch (error) {
-    console.error("Chat API error:", error);
     return Response.json(
       { error: error instanceof Error ? error.message : "Chat API error" },
       { status: 500 },

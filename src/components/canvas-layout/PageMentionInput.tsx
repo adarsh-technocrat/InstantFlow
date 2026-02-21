@@ -204,21 +204,6 @@ export function PageMentionInput({
 
   const handleKeyDownForAt = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === "@") {
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7250/ingest/47a05d85-83fa-488f-80fd-71b6305c6b29",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "PageMentionInput.tsx:handleKeyDownForAt",
-            message: "Setting showMentionSuggestions=true",
-            data: { hypothesisId: "E" },
-            timestamp: Date.now(),
-          }),
-        },
-      ).catch(() => {});
-      // #endregion
       requestAnimationFrame(() => {
         setShowMentionSuggestions(true);
         setQuery("");
@@ -229,26 +214,6 @@ export function PageMentionInput({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7250/ingest/47a05d85-83fa-488f-80fd-71b6305c6b29",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "PageMentionInput.tsx:handleKeyDown",
-            message: "KeyDown",
-            data: {
-              key: e.key,
-              keyCode: e.keyCode,
-              shiftKey: e.shiftKey,
-              hypothesisId: "A,B",
-            },
-            timestamp: Date.now(),
-          }),
-        },
-      ).catch(() => {});
-      // #endregion
       if (e.key === "@") {
         handleKeyDownForAt(e);
       }
@@ -301,32 +266,6 @@ export function PageMentionInput({
   const showSuggestions = showMentionSuggestions;
   const hasPages = filteredPages.length > 0;
 
-  useEffect(() => {
-    if (showMentionSuggestions || showSuggestions) {
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7250/ingest/47a05d85-83fa-488f-80fd-71b6305c6b29",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "PageMentionInput.tsx:useEffect",
-            message: "Mention state",
-            data: {
-              showMentionSuggestions,
-              showSuggestions,
-              hasPages,
-              pagesCount: filteredPages.length,
-              hypothesisId: "C,E",
-            },
-            timestamp: Date.now(),
-          }),
-        },
-      ).catch(() => {});
-      // #endregion
-    }
-  }, [showMentionSuggestions, showSuggestions, hasPages, filteredPages.length]);
-
   return (
     <div className="relative">
       <div
@@ -336,21 +275,6 @@ export function PageMentionInput({
         onInput={handleInput}
         onKeyDown={handleKeyDown}
         onBlur={() => {
-          // #region agent log
-          fetch(
-            "http://127.0.0.1:7250/ingest/47a05d85-83fa-488f-80fd-71b6305c6b29",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "PageMentionInput.tsx:onBlur",
-                message: "Blur fired",
-                data: { hypothesisId: "D" },
-                timestamp: Date.now(),
-              }),
-            },
-          ).catch(() => {});
-          // #endregion
           setTimeout(hideSuggestions, 150);
         }}
         className={`min-h-12 max-h-32 w-full resize-none overflow-y-auto rounded-none border-none bg-transparent p-4 text-sm text-white/90 outline-none ring-0 placeholder:text-zinc-400 focus-visible:ring-0 empty:before:content-[attr(data-placeholder)] empty:before:text-zinc-400 ${className}`}

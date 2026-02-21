@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import { CodeDialog } from "@/components/CodeDialog";
+
 function DragHandleIcon() {
   return (
     <svg
@@ -114,17 +117,18 @@ const TOOLBAR_GAP_SCREEN_PX = 48;
 
 export interface FrameToolbarProps {
   label: string;
-  /** Scale to match canvas zoom (toolbar scales with frame) */
+  html?: string;
   scale?: number;
-  /** Canvas zoom scale (0–8); used so gap above frame stays fixed on screen when zooming */
   canvasScale?: number;
 }
 
 export function FrameToolbar({
   label,
+  html = "",
   scale = 1.76418,
   canvasScale = 0.556382,
 }: FrameToolbarProps) {
+  const [codeDialogOpen, setCodeDialogOpen] = useState(false);
   const topOffsetPx =
     canvasScale > 0 ? TOOLBAR_GAP_SCREEN_PX / canvasScale : 70;
   return (
@@ -149,8 +153,16 @@ export function FrameToolbar({
         </div>
       </div>
       <div className="h-4 w-px bg-white/20" />
-      <div className="flex items-center gap-1">
-        <button type="button" className={toolbarButtonClass} title="Code">
+      <div data-toolbar-buttons className="flex items-center gap-1">
+        <button
+          type="button"
+          className={toolbarButtonClass}
+          title="Code"
+          onClick={(e) => {
+            e.stopPropagation();
+            setCodeDialogOpen(true);
+          }}
+        >
           <CodeIcon />
         </button>
         <button type="button" className={toolbarButtonClass} title="Figma">
@@ -176,6 +188,12 @@ export function FrameToolbar({
           <MoreIcon />
         </button>
       </div>
+      <CodeDialog
+        open={codeDialogOpen}
+        onClose={() => setCodeDialogOpen(false)}
+        title={label}
+        code={html}
+      />
     </div>
   );
 }

@@ -24,13 +24,8 @@ function getToolDisplayLabel(
 ): string {
   const toTitle = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
 
-  if (toolType === "step_analyzed_request")
-    return isCalled ? "Analyzed request" : "Analyzing request…";
-  if (toolType === "step_planned_screens")
-    return isCalled ? "Planned screens" : "Planning screens…";
-  if (toolType === "step_planned_visual_identity")
-    return isCalled ? "Planned visual identity" : "Planning visual identity…";
-
+  if (toolType === "create_theme")
+    return isCalled ? "Created theme" : "Creating theme…";
   if (toolType === "build_theme")
     return isCalled ? "Created theme" : "Creating theme…";
   if (toolType === "update_theme")
@@ -41,6 +36,11 @@ function getToolDisplayLabel(
       ? `Created ${toTitle(input.name)} screen`
       : `Creating ${toTitle(input.name)} screen…`;
   }
+  if (toolType === "generate_image" && input?.id)
+    return isCalled
+      ? `Generated image ${input.id}`
+      : `Generating image ${input.id}…`;
+
   if (
     input?.id &&
     (toolType === "read_screen" ||
@@ -64,6 +64,7 @@ function getToolDisplayLabel(
 
 interface MessagePart {
   type: string;
+  id?: string;
   text?: string;
   state?: string;
   toolCallId?: string;
@@ -71,6 +72,11 @@ interface MessagePart {
     id?: string;
     name?: string;
     screen_html?: string;
+  };
+  data?: {
+    result?: unknown;
+    status?: string;
+    stepId?: string;
   };
 }
 
@@ -135,8 +141,11 @@ function AssistantMessageContent({
   const blocks: Array<
     | { kind: "text"; text: string }
     | { kind: "reasoning"; text: string }
+    | { kind: "step-result"; part: MessagePart }
+    | { kind: "step-start" }
     | { kind: "tools"; tools: MessagePart[] }
   > = [];
+  const seenStepIds = new Set<string>();
   let i = 0;
   while (i < parts.length) {
     const part = parts[i];
@@ -145,6 +154,20 @@ function AssistantMessageContent({
       i++;
     } else if (part.type === "reasoning") {
       blocks.push({ kind: "reasoning", text: part.text ?? "" });
+      i++;
+    } else if (part.type === "data-step-result") {
+      const rawId =
+        (part.data as { stepId?: string })?.stepId ?? part.id ?? `step-${i}`;
+      const stepId = String(rawId).toLowerCase().replace(/\s+/g, "");
+      if (seenStepIds.has(stepId)) {
+        i++;
+        continue;
+      }
+      seenStepIds.add(stepId);
+      blocks.push({ kind: "step-result", part });
+      i++;
+    } else if (part.type === "data-step-start") {
+      blocks.push({ kind: "step-start" });
       i++;
     } else if (part.type.startsWith("tool-")) {
       const toolGroup: MessagePart[] = [];
@@ -176,6 +199,18 @@ function AssistantMessageContent({
             isStreaming={isStreaming}
             isComplete={!isStreaming || bi < blocks.length - 1}
           />
+        ) : block.kind === "step-result" ? (
+          <div
+            key={bi}
+            className="not-prose flex w-fit flex-col rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1"
+          >
+            <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+              {block.part.data?.stepId?.replace(/([A-Z])/g, " $1").trim() ??
+                "Step"}
+            </span>
+          </div>
+        ) : block.kind === "step-start" ? (
+          <div key={bi} className="h-px w-full shrink-0 bg-border/40" />
         ) : (
           <div key={bi} className="flex flex-wrap gap-2">
             {block.tools.map((tool, ti) => {
@@ -506,58 +541,72 @@ export function ChatPanel({
               content?: string;
             },
             msgIndex: number,
-          ) => (
-            <div
-              key={msg.id}
-              className={`flex w-full ${
-                msg.role === "user" ? "justify-end" : "justify-start"
-              }`}
-            >
+          ) => {
+            const nextMsg = messages[msgIndex + 1];
+            const prevMsg = messages[msgIndex - 1];
+            const isPlannerOnly =
+              msg.role === "assistant" &&
+              (msg.parts ?? []).length <= 4 &&
+              (msg.parts ?? []).every(
+                (p: { type: string }) =>
+                  p.type === "data-step-result" || p.type === "data-step-start",
+              );
+            const hasAdjacentAssistant =
+              nextMsg?.role === "assistant" || prevMsg?.role === "assistant";
+            if (isPlannerOnly && hasAdjacentAssistant) return null;
+            return (
               <div
-                className={`rounded-lg px-3 py-2 text-sm ${
-                  msg.role === "user"
-                    ? "w-fit max-w-[85%] text-white"
-                    : msg.role === "assistant"
-                      ? "w-full bg-muted/50 text-stone-300"
-                      : "w-fit max-w-[85%] bg-muted/30"
+                key={msg.id}
+                className={`flex w-full ${
+                  msg.role === "user" ? "justify-end" : "justify-start"
                 }`}
-                style={
-                  msg.role === "user"
-                    ? { backgroundColor: "#2e2726" }
-                    : undefined
-                }
               >
-                {msg.role === "assistant" ? (
-                  msg.parts && msg.parts.length > 0 ? (
-                    <AssistantMessageContent
-                      parts={msg.parts as MessagePart[]}
-                      frames={frames}
-                      isStreaming={
-                        msg.role === "assistant" &&
-                        status === "streaming" &&
-                        msgIndex === messages.length - 1
-                      }
-                    />
-                  ) : typeof msg.content === "string" ? (
-                    <div className="chat-markdown">
-                      <ReactMarkdown components={markdownComponents}>
-                        {msg.content}
-                      </ReactMarkdown>
-                    </div>
-                  ) : null
-                ) : msg.role === "user" ? (
-                  (() => {
-                    if (typeof msg.content === "string") return msg.content;
-                    const textPart = msg.parts?.find(
-                      (p: { type: string; text?: string }) =>
-                        p.type === "text" && p.text,
-                    );
-                    return textPart?.text ?? null;
-                  })()
-                ) : null}
+                <div
+                  className={`rounded-lg px-3 py-2 text-sm ${
+                    msg.role === "user"
+                      ? "w-fit max-w-[85%] text-white"
+                      : msg.role === "assistant"
+                        ? "w-full bg-muted/50 text-stone-300"
+                        : "w-fit max-w-[85%] bg-muted/30"
+                  }`}
+                  style={
+                    msg.role === "user"
+                      ? { backgroundColor: "#2e2726" }
+                      : undefined
+                  }
+                >
+                  {msg.role === "assistant" ? (
+                    msg.parts && msg.parts.length > 0 ? (
+                      <AssistantMessageContent
+                        parts={msg.parts as MessagePart[]}
+                        frames={frames}
+                        isStreaming={
+                          msg.role === "assistant" &&
+                          status === "streaming" &&
+                          msgIndex === messages.length - 1
+                        }
+                      />
+                    ) : typeof msg.content === "string" ? (
+                      <div className="chat-markdown">
+                        <ReactMarkdown components={markdownComponents}>
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
+                    ) : null
+                  ) : msg.role === "user" ? (
+                    (() => {
+                      if (typeof msg.content === "string") return msg.content;
+                      const textPart = msg.parts?.find(
+                        (p: { type: string; text?: string }) =>
+                          p.type === "text" && p.text,
+                      );
+                      return textPart?.text ?? null;
+                    })()
+                  ) : null}
+                </div>
               </div>
-            </div>
-          ),
+            );
+          },
         )}
         {(status === "submitted" || status === "streaming") && (
           <div className="flex w-full justify-start">
@@ -576,11 +625,44 @@ export function ChatPanel({
           className="w-full overflow-visible rounded-xl border border-border/60 shadow-none focus-within:ring-2 focus-within:ring-ring/30"
           style={{ backgroundColor: "#2e2726" }}
         >
+          {selectedFrameIds.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 px-4 pt-3 pb-1">
+              {selectedFrameIds.map((id) => {
+                const frame = frames.find((f) => f.id === id);
+                if (!frame) return null;
+                return (
+                  <span
+                    key={id}
+                    className="mention-chip inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium text-white"
+                    style={{
+                      backgroundColor: "#6E4A2E",
+                      borderColor: "#BF8456",
+                    }}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                    </svg>
+                    {frame.label}
+                  </span>
+                );
+              })}
+            </div>
+          )}
           <PageMentionInput
             value={inputValue}
             onChange={setInputValue}
             pages={frames.map((f) => ({ id: f.id, label: f.label }))}
-            placeholder="Describe what you want to create or change…"
+            placeholder="What changes do you want to make?"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
