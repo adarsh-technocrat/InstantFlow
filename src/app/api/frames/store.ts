@@ -56,3 +56,9 @@ export async function getFramesByProject(projectId: string) {
     html: f.html,
   }));
 }
+
+export async function deleteFrame(frameId: string) {
+  await prisma.frame.deleteMany({
+    where: { id: frameId },
+  });
+}

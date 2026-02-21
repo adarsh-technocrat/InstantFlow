@@ -49,6 +49,29 @@ export function Canvas() {
     [frames],
   );
 
+  const prevFrameIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const currentIds = new Set(frames.map((f) => f.id));
+    const prevIds = prevFrameIdsRef.current;
+    const addedIds = [...currentIds].filter((id) => !prevIds.has(id));
+    if (
+      addedIds.length === 1 &&
+      selectedFrameIds[0] === addedIds[0] &&
+      prevIds.size > 0
+    ) {
+      const frame = frames.find((f) => f.id === addedIds[0]);
+      if (frame)
+        persistFramePosition(
+          frame.id,
+          frame.label,
+          frame.left,
+          frame.top,
+          frame.html,
+        );
+    }
+    prevFrameIdsRef.current = currentIds;
+  }, [frames, selectedFrameIds, persistFramePosition]);
+
   const handlePositionChange = useCallback(
     (id: string, newLeft: number, newTop: number) => {
       updateFrameProperties(id, { left: newLeft, top: newTop });
@@ -94,11 +117,26 @@ export function Canvas() {
           <SelectionToast
             message={label}
             onCopy={() => {
-              if (selectedFrameIds[0]) duplicateFrameById(selectedFrameIds[0]);
+              if (selectedFrameIds[0]) {
+                duplicateFrameById(selectedFrameIds[0]);
+                toast.success("Screen duplicated", {
+                  position: "bottom-center",
+                });
+              }
             }}
             onDelete={() => {
-              selectedFrameIds.forEach((id) => removeFrameFromCanvas(id));
+              const count = selectedFrameIds.length;
+              selectedFrameIds.forEach((id) => {
+                fetch(`/api/frames?frameId=${encodeURIComponent(id)}`, {
+                  method: "DELETE",
+                }).catch(() => {});
+                removeFrameFromCanvas(id);
+              });
               toast.dismiss("selection");
+              toast.success(
+                count === 1 ? "Screen deleted" : `${count} screens deleted`,
+                { position: "bottom-center" },
+              );
             }}
           />
         ),

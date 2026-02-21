@@ -111,7 +111,7 @@ export function useFrameInteraction({
   const handleContentPointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0) return;
-      if (spaceHeld) return; // Let event bubble to container for panning
+      if (spaceHeld) return;
       e.stopPropagation();
       onSelect?.(id, e.metaKey);
     },

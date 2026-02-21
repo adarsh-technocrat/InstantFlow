@@ -254,7 +254,10 @@ export async function POST(req: Request) {
     }));
     const theme: ThemeVariables = { ...initialTheme };
 
-    const isInitial = frames.length === 0 || Object.keys(theme).length === 0;
+    const userMessageCount = rawMessages.filter(
+      (m: { role?: string }) => m.role === "user",
+    ).length;
+    const isInitial = userMessageCount <= 1 && userPrompt.trim() !== "";
     const imageMap: Record<string, string> = {};
 
     const stream = createUIMessageStream({
