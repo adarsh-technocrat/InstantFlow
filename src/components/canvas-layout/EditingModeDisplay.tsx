@@ -4,12 +4,7 @@ import { useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setChatPanelOpen, toggleChatPanel } from "@/store/slices/uiSlice";
 import { ChatPanel } from "./ChatPanel";
-import {
-  ReferenceModeIcon,
-  SectionalEditIcon,
-  StyleGuideIcon,
-  TextEditingIcon,
-} from "./icons";
+import { StyleGuideIcon } from "@/lib/svg-icons";
 
 function ChatToggleButton() {
   const dispatch = useAppDispatch();
@@ -33,9 +28,7 @@ function ChatToggleButton() {
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
-        <path d="M12 8v4" />
-        <path d="M12 16h.01" />
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
       </svg>
     </button>
   );
@@ -44,9 +37,6 @@ function ChatToggleButton() {
 export function EditingModeDisplay() {
   const dispatch = useAppDispatch();
   const chatPanelOpen = useAppSelector((s) => s.ui.chatPanelOpen);
-  const [referenceMode, setReferenceMode] = useState(false);
-  const [sectionalMode, setSectionalMode] = useState(false);
-  const [textEditingMode, setTextEditingMode] = useState(false);
   const [styleGuideOpen, setStyleGuideOpen] = useState(false);
 
   return (
@@ -60,78 +50,8 @@ export function EditingModeDisplay() {
         <div className="relative">
           <button
             type="button"
-            onClick={() => setReferenceMode((v) => !v)}
-            className={`rounded-md p-2 ${referenceMode ? "reference-mode-button" : "text-white/90 hover:bg-white/10"}`}
-          >
-            <ReferenceModeIcon
-              color={
-                referenceMode
-                  ? "var(--primary-foreground)"
-                  : "rgba(255,255,255,0.9)"
-              }
-            />
-          </button>
-          {referenceMode && (
-            <button
-              type="button"
-              onClick={() => setReferenceMode(false)}
-              className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-xs font-bold text-white"
-            >
-              ×
-            </button>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={() => setSectionalMode((v) => !v)}
-          className={`relative rounded-md p-2 ${sectionalMode ? "reference-mode-button" : "text-white/90 hover:bg-white/10"}`}
-        >
-          <SectionalEditIcon
-            color={
-              sectionalMode
-                ? "var(--primary-foreground)"
-                : "rgba(255,255,255,0.9)"
-            }
-          />
-          {sectionalMode && (
-            <button
-              type="button"
-              onClick={() => setSectionalMode(false)}
-              className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-xs font-bold text-white"
-            >
-              ×
-            </button>
-          )}
-        </button>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setTextEditingMode((v) => !v)}
-            className={`rounded-md p-2 ${textEditingMode ? "reference-mode-button" : "text-white/90 hover:bg-white/10"}`}
-          >
-            <TextEditingIcon
-              color={
-                textEditingMode
-                  ? "var(--primary-foreground)"
-                  : "rgba(255,255,255,0.9)"
-              }
-            />
-          </button>
-          {textEditingMode && (
-            <button
-              type="button"
-              onClick={() => setTextEditingMode(false)}
-              className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-xs font-bold text-white"
-            >
-              ×
-            </button>
-          )}
-        </div>
-        <div className="relative">
-          <button
-            type="button"
             onClick={() => setStyleGuideOpen((v) => !v)}
-            className={`rounded-md p-2 ${styleGuideOpen ? "reference-mode-button" : "text-white/90 hover:bg-white/10"}`}
+            className={`rounded-full p-2 ${styleGuideOpen ? "reference-mode-button" : "text-white/90 hover:bg-white/10"}`}
           >
             <StyleGuideIcon
               color={

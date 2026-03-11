@@ -8,7 +8,6 @@ const btnClass =
 export function CanvasTopRight() {
   return (
     <div className="absolute right-4 top-4 z-10 flex w-auto flex-row items-center gap-1 rounded-xl bg-canvas-panel px-2 py-1.5">
-      {/* Prototype */}
       <button
         type="button"
         className={btnClass}
@@ -24,13 +23,11 @@ export function CanvasTopRight() {
 
       <div className="h-4 w-px bg-white/20" aria-hidden />
 
-      {/* Preview */}
       <button type="button" className={btnClass} title="Preview">
         <Play className="size-4" />
         <span>Preview</span>
       </button>
 
-      {/* Share */}
       <button type="button" className={btnClass} title="Share">
         <Share2 className="size-4" />
         <span>Share</span>
@@ -38,13 +35,11 @@ export function CanvasTopRight() {
 
       <div className="h-4 w-px bg-white/20" aria-hidden />
 
-      {/* Upgrade */}
       <button type="button" className={btnClass} title="Upgrade">
         <Crown className="size-4" />
         <span>Upgrade</span>
       </button>
 
-      {/* User Avatar */}
       <button
         type="button"
         className="inline-flex size-8 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white/90"
