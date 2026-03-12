@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -863,52 +863,67 @@ export function ChatPanel({
                 ) ||
                 typeof msg.content === "string";
               if (!hasVisibleContent) return null;
+
+              const showPlanningBeforeThis =
+                planningSteps.length > 0 &&
+                msg.role === "assistant" &&
+                isLastMessage;
+
               return (
-                <div
-                  key={msg.id}
-                  className={`flex w-full ${
-                    msg.role === "user" ? "justify-end" : "justify-start"
-                  }`}
-                >
+                <Fragment key={msg.id}>
+                  {showPlanningBeforeThis && (
+                    <PlanningStepsBlock steps={planningSteps} />
+                  )}
                   <div
-                    className={`rounded-lg px-3 py-2 text-sm ${
-                      msg.role === "user"
-                        ? "w-fit max-w-[85%] text-white"
-                        : msg.role === "assistant"
-                          ? "w-full bg-muted/50 text-stone-300"
-                          : "w-fit max-w-[85%] bg-muted/30"
+                    className={`flex w-full ${
+                      msg.role === "user" ? "justify-end" : "justify-start"
                     }`}
-                    style={
-                      msg.role === "user"
-                        ? { backgroundColor: "#2e2726" }
-                        : undefined
-                    }
                   >
-                    {msg.role === "assistant" ? (
-                      msg.parts && msg.parts.length > 0 ? (
-                        <AssistantMessageContent
-                          parts={msg.parts as MessagePart[]}
-                          frames={frames}
-                          isStreaming={status === "streaming" && isLastMessage}
-                        />
-                      ) : typeof msg.content === "string" ? (
-                        <div className="chat-markdown">
-                          <ReactMarkdown components={markdownComponents}>
-                            {msg.content}
-                          </ReactMarkdown>
-                        </div>
-                      ) : null
-                    ) : msg.role === "user" ? (
-                      getUserMessageText(msg)
-                    ) : null}
+                    <div
+                      className={`rounded-lg px-3 py-2 text-sm ${
+                        msg.role === "user"
+                          ? "w-fit max-w-[85%] text-white"
+                          : msg.role === "assistant"
+                            ? "w-full bg-muted/50 text-stone-300"
+                            : "w-fit max-w-[85%] bg-muted/30"
+                      }`}
+                      style={
+                        msg.role === "user"
+                          ? { backgroundColor: "#2e2726" }
+                          : undefined
+                      }
+                    >
+                      {msg.role === "assistant" ? (
+                        msg.parts && msg.parts.length > 0 ? (
+                          <AssistantMessageContent
+                            parts={msg.parts as MessagePart[]}
+                            frames={frames}
+                            isStreaming={
+                              status === "streaming" && isLastMessage
+                            }
+                          />
+                        ) : typeof msg.content === "string" ? (
+                          <div className="chat-markdown">
+                            <ReactMarkdown components={markdownComponents}>
+                              {msg.content}
+                            </ReactMarkdown>
+                          </div>
+                        ) : null
+                      ) : msg.role === "user" ? (
+                        getUserMessageText(msg)
+                      ) : null}
+                    </div>
                   </div>
-                </div>
+                </Fragment>
               );
             },
           )}
-        {planningSteps.length > 0 && (
-          <PlanningStepsBlock steps={planningSteps} />
-        )}
+        {planningSteps.length > 0 &&
+          (status === "submitted" || status === "streaming") &&
+          (messages.length === 0 ||
+            messages[messages.length - 1]?.role !== "assistant") && (
+            <PlanningStepsBlock steps={planningSteps} />
+          )}
         {(status === "submitted" || status === "streaming") && (
           <StreamingActivityIndicator />
         )}
