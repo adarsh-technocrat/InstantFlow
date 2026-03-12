@@ -22,8 +22,6 @@ export function CanvasLoader({
           className="rounded-[25px]"
         />
         <p className="text-neutral-1-light text-sm font-medium">{message}</p>
-
-        {/* Horizontal line loader */}
         <div className="w-48 h-1 bg-neutral-9-light rounded-full overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-[var(--brand-primary)] to-[var(--secondary-pink-1)] rounded-full"

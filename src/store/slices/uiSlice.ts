@@ -8,7 +8,7 @@ interface UIState {
 }
 
 const initialState: UIState = {
-  chatPanelOpen: false,
+  chatPanelOpen: true,
   canvasToolMode: "select",
 };
 

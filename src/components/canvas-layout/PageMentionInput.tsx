@@ -24,7 +24,6 @@ interface PageMentionInputProps {
   className?: string;
 }
 
-/** Extracts plain text with @PageLabel for mentions. */
 function getTextWithMentions(root: Node): string {
   let out = "";
   const walk = (n: Node) => {
@@ -149,7 +148,6 @@ export function PageMentionInput({
       replaceRange.setStart(startPos.node, startPos.offset);
       replaceRange.setEnd(cursorRange.startContainer, cursorRange.startOffset);
       const chip = createChipElement(page.label, page.id);
-      const spaceAfter = document.createTextNode(" ");
       replaceRange.deleteContents();
       const frag = document.createDocumentFragment();
       frag.appendChild(chip);
@@ -252,10 +250,6 @@ export function PageMentionInput({
       onKeyDown,
     ],
   );
-
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [filteredPages]);
 
   useEffect(() => {
     if (editorRef.current && value === "") {
