@@ -60,7 +60,7 @@ export function createTools(ctx: ToolContext) {
     read_theme: tool({
       description:
         "Returns current CSS theme variables and fonts. No arguments needed.",
-      inputSchema: z.object({}).passthrough(),
+      inputSchema: z.object({}),
       execute: async () => JSON.stringify(theme, null, 2),
     }),
 
@@ -304,13 +304,13 @@ export function createTools(ctx: ToolContext) {
         "Updates CSS theme variables. Example: { '--primary': '#2563EB' }",
       inputSchema: z.object({
         updates: z
-          .record(z.string(), z.coerce.string())
+          .record(z.string(), z.string())
           .describe("CSS variable names to values"),
       }),
       execute: async ({ updates }: { updates: Record<string, string> }) => {
         for (const k of Object.keys(updates)) {
           const v = updates[k];
-          if (v !== undefined) theme[k] = v;
+          if (v !== undefined) theme[k] = String(v);
         }
         writer.write({
           type: "data-frame-action",
@@ -326,7 +326,7 @@ export function createTools(ctx: ToolContext) {
         "Creates or replaces the global theme. Pass theme_vars as an object: CSS variable names (with --) to values. Use for initial theme creation.",
       inputSchema: z.object({
         description: z.string().optional(),
-        theme_vars: z.record(z.string(), z.coerce.string()),
+        theme_vars: z.record(z.string(), z.string()),
       }),
       execute: async ({
         theme_vars = {},
@@ -366,33 +366,32 @@ export function createTools(ctx: ToolContext) {
         prompt: z.string().describe("Detailed image description"),
         aspect_ratio: z
           .string()
-          .describe("One of: square, landscape, portrait")
-          .transform((v) => {
-            const lower = v.toLowerCase().trim();
-            if (["landscape", "16:9", "wide", "horizontal"].includes(lower))
-              return "landscape";
-            if (["portrait", "9:16", "tall", "vertical"].includes(lower))
-              return "portrait";
-            return "square";
-          }),
-        background: z
-          .string()
-          .describe("One of: opaque, transparent")
-          .transform((v) => {
-            const lower = v.toLowerCase().trim();
-            return lower === "transparent" ? "transparent" : "opaque";
-          }),
+          .describe("One of: square, landscape, portrait"),
+        background: z.string().describe("One of: opaque, transparent"),
       }),
       execute: async ({
         id,
         prompt,
-        aspect_ratio,
+        aspect_ratio: rawAspect,
+        background: _background,
       }: {
         id: string;
         prompt: string;
         aspect_ratio: string;
         background: string;
       }) => {
+        // Normalize aspect_ratio from model variations
+        const lowerAspect = rawAspect.toLowerCase().trim();
+        const aspect_ratio = [
+          "landscape",
+          "16:9",
+          "wide",
+          "horizontal",
+        ].includes(lowerAspect)
+          ? "landscape"
+          : ["portrait", "9:16", "tall", "vertical"].includes(lowerAspect)
+            ? "portrait"
+            : "square";
         // Try custom image gen API first
         if (process.env.IMAGE_GEN_API_URL) {
           try {
