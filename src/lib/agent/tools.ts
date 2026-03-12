@@ -3,7 +3,7 @@
  * Factory function creates tools with closures over mutable state.
  */
 
-import { tool, generateImage, type UIMessageStreamWriter } from "ai";
+import { tool, type UIMessageStreamWriter } from "ai";
 import { z } from "zod";
 import type { GoogleVertexProvider } from "@ai-sdk/google-vertex";
 import {
@@ -40,7 +40,7 @@ const FRAME_SPACING = 420;
 const STREAM_THROTTLE_MS = 120;
 
 export function createTools(ctx: ToolContext) {
-  const { frames, theme, imageMap, writer, vertex } = ctx;
+  const { frames, theme, imageMap, writer } = ctx;
 
   const createScreenStreamState = new Map<string, CreateScreenStreamState>();
   const updateScreenStreamState = new Map<string, UpdateScreenStreamState>();
@@ -66,7 +66,7 @@ export function createTools(ctx: ToolContext) {
 
     create_screen: tool({
       description:
-        'Creates a new screen. screen_html is inner body content only (no html, head, or body tags). Use src="placeholder:{id}" for AI-generated images; call generate_image first with the same id.',
+        "Creates a new screen. screen_html is inner body content only (no html, head, or body tags).",
       inputSchema: z.object({
         name: z.string().describe("Screen label/name"),
         screen_html: z.string().describe("HTML for body content only"),
@@ -358,101 +358,7 @@ export function createTools(ctx: ToolContext) {
       },
     }),
 
-    generate_image: tool({
-      description:
-        'Generates an AI image. Call FIRST before create_screen/update_screen that uses it. In HTML use src="placeholder:{id}" to reference. aspect_ratio: square|landscape|portrait. background: opaque (photos) or transparent (icons).',
-      inputSchema: z.object({
-        id: z.string().describe("Placeholder id, e.g. img-1"),
-        prompt: z.string().describe("Detailed image description"),
-        aspect_ratio: z
-          .string()
-          .describe("One of: square, landscape, portrait"),
-        background: z.string().describe("One of: opaque, transparent"),
-      }),
-      execute: async ({
-        id,
-        prompt,
-        aspect_ratio: rawAspect,
-        background: _background,
-      }: {
-        id: string;
-        prompt: string;
-        aspect_ratio: string;
-        background: string;
-      }) => {
-        // Normalize aspect_ratio from model variations
-        const lowerAspect = rawAspect.toLowerCase().trim();
-        const aspect_ratio = [
-          "landscape",
-          "16:9",
-          "wide",
-          "horizontal",
-        ].includes(lowerAspect)
-          ? "landscape"
-          : ["portrait", "9:16", "tall", "vertical"].includes(lowerAspect)
-            ? "portrait"
-            : "square";
-        // Try custom image gen API first
-        if (process.env.IMAGE_GEN_API_URL) {
-          try {
-            const res = await fetch(process.env.IMAGE_GEN_API_URL, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ prompt, aspect_ratio, n: 1 }),
-            });
-            const data = await res.json();
-            const url = data.url ?? data.data?.[0]?.url ?? data.output?.[0];
-            if (url) {
-              imageMap[id] = url;
-              return { success: true, url };
-            }
-          } catch {
-            // Fall through to next provider
-          }
-        }
-
-        // Try Vertex Imagen
-        if (process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
-          try {
-            const aspectRatioMap = {
-              square: "1:1" as const,
-              landscape: "16:9" as const,
-              portrait: "9:16" as const,
-            };
-            const aspectRatio =
-              aspectRatioMap[aspect_ratio as keyof typeof aspectRatioMap] ??
-              "1:1";
-            const imageModel = vertex.image("imagen-3.0-fast-generate-001");
-            const { image } = await generateImage({
-              model: imageModel,
-              prompt,
-              n: 1,
-              aspectRatio,
-            });
-            const dataUrl = `data:${image.mediaType};base64,${image.base64}`;
-            imageMap[id] = dataUrl;
-            return { success: true, url: dataUrl };
-          } catch {
-            // Fall through to placeholder
-          }
-        }
-
-        // Fallback to picsum placeholder
-        const w =
-          aspect_ratio === "landscape"
-            ? 1024
-            : aspect_ratio === "portrait"
-              ? 768
-              : 512;
-        const h =
-          aspect_ratio === "landscape"
-            ? 768
-            : aspect_ratio === "portrait"
-              ? 1024
-              : 512;
-        imageMap[id] = `https://picsum.photos/seed/${id}/${w}/${h}`;
-        return { success: true, url: imageMap[id] };
-      },
-    }),
+    // TODO: Re-enable with CDN upload — generate image, upload to CDN, return URL
+    // generate_image: tool({ ... }),
   };
 }

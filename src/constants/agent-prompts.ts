@@ -111,8 +111,6 @@ Use iconify-icon: \`<iconify-icon icon="solar:user-bold" class="size-5"></iconif
 - **update_screen(id, screen_html)**: Replaces the ENTIRE screen body. Use ONLY for broad/layout redesigns. Do NOT use for small edits — that would regenerate the whole UI.
 - **update_theme(updates)**: Updates CSS tokens (e.g., {"--primary": "#hex"}). Merges with current theme.
 - **build_theme(theme_vars)**: Creates/replaces the full global theme. Pass theme_vars as an object: {"--primary":"#hex","--background":"#hex","--foreground":"#hex","--card":"#hex","--radius":"0.5rem","--font-sans":"system-ui","--font-heading":"system-ui",...}. Keys must have -- prefix. Include --background, --foreground, --primary, --primary-foreground, --secondary, --muted, --card, --border, --radius, --font-sans, --font-heading.
-- **generate_image(id, prompt, aspect_ratio, background)**: Creates AI image. Call FIRST, then use src="placeholder:{id}" in screen HTML.
-
 ## Theme
 - There is no default theme. Use build_theme when the user describes a theme.
 - If the user has not set a theme yet, suggest they describe the look they want and call build_theme.
