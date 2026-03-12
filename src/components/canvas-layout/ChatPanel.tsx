@@ -12,10 +12,17 @@ import {
   setTheme,
   replaceTheme,
 } from "@/store/slices/canvasSlice";
-import { Brain, ChevronDown, CircleX } from "lucide-react";
+import { Brain, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { CloseIcon, ImageIcon } from "@/lib/svg-icons";
 import { PageMentionInput } from "./PageMentionInput";
+
+interface ToolStep {
+  toolCallId: string;
+  toolName: string;
+  state: "running" | "done" | "error";
+  input?: { id?: string; name?: string };
+}
 
 const latestCanvasState: {
   frames: {
@@ -36,6 +43,13 @@ function getToolDisplayLabel(
 ): string {
   const toTitle = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
 
+  if (toolType === "classifyIntent")
+    return isCalled ? "Understood intent" : "Understanding intent…";
+  if (toolType === "planScreens")
+    return isCalled ? "Planned screens" : "Planning screens…";
+  if (toolType === "planStyle")
+    return isCalled ? "Defined visual style" : "Defining visual style…";
+
   if (toolType === "build_theme")
     return isCalled ? "Created theme" : "Creating theme…";
   if (toolType === "update_theme")
@@ -46,11 +60,6 @@ function getToolDisplayLabel(
       ? `Created ${toTitle(input.name)} screen`
       : `Creating ${toTitle(input.name)} screen…`;
   }
-  if (toolType === "generate_image" && input?.id)
-    return isCalled
-      ? `Generated image ${input.id}`
-      : `Generating image ${input.id}…`;
-
   if (
     input?.id &&
     (toolType === "read_screen" ||
@@ -72,83 +81,108 @@ function getToolDisplayLabel(
   return isCalled ? base : `${base}…`;
 }
 
+/** JSON-serializable value for tool input/output. */
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: JsonValue }
+  | JsonValue[];
+
 interface MessagePart {
   type: string;
-  id?: string;
   text?: string;
-  state?: string;
   toolCallId?: string;
-  input?: {
-    id?: string;
-    name?: string;
-    screen_html?: string;
-  };
-  data?: {
-    result?: unknown;
-    status?: string;
-    stepId?: string;
-  };
+  toolName?: string;
+  state?: string;
+  input?: Record<string, JsonValue>;
 }
 
-interface PlanningStep {
-  stepId: string;
-  label: string;
-  status: "pending" | "success" | "error";
+const TOOL_STEP_PART_TYPE = "tool-step";
+
+function toolStepsFromParts(
+  parts: MessagePart[] | undefined,
+): ToolStep[] | undefined {
+  if (!parts?.length) return undefined;
+
+  const steps: ToolStep[] = [];
+
+  for (const p of parts) {
+    if (p.type === TOOL_STEP_PART_TYPE) {
+      steps.push({
+        toolCallId: p.toolCallId ?? "",
+        toolName: p.toolName ?? "tool",
+        state: (p.state as ToolStep["state"]) ?? "done",
+        input: p.input as { id?: string; name?: string } | undefined,
+      });
+      continue;
+    }
+    if (p.type?.startsWith("tool-") || p.type === "dynamic-tool") {
+      const state =
+        p.state === "output-available"
+          ? ("done" as const)
+          : p.state === "output-error" || p.state === "input-error"
+            ? ("error" as const)
+            : ("running" as const);
+      const input: { id?: string; name?: string } = {};
+      const raw = p.input as { id?: string; name?: string } | undefined;
+      if (raw?.id) input.id = raw.id;
+      if (raw?.name) input.name = raw.name;
+      const toolName =
+        p.toolName ?? (p.type?.startsWith("tool-") ? p.type.slice(5) : "");
+      steps.push({
+        toolCallId: p.toolCallId ?? "",
+        toolName: toolName || "tool",
+        state,
+        input: Object.keys(input).length ? input : undefined,
+      });
+    }
+  }
+
+  return steps.length > 0 ? steps : undefined;
 }
 
-const PLANNING_STEP_LABELS: Record<string, string> = {
-  classifyIntent: "Understanding intent",
-  planScreens: "Planning screens",
-  planStyle: "Defining visual style",
-};
+function addStepIfNew(prev: ToolStep[], step: ToolStep): ToolStep[] {
+  if (prev.some((s) => s.toolCallId === step.toolCallId)) return prev;
+  return [...prev, step];
+}
 
-function PlanningStepChip({ step }: { step: PlanningStep }) {
-  const isSuccess = step.status === "success";
-  const isError = step.status === "error";
-  const isPending = step.status === "pending";
+function ToolStepChip({
+  step,
+  frames,
+}: {
+  step: ToolStep;
+  frames: { id: string; label: string }[];
+}) {
+  const label = getToolDisplayLabel(
+    step.toolName,
+    frames,
+    step.input,
+    step.state === "done",
+  );
+  const finished = step.state === "done";
 
   return (
     <div
       className={`not-prose flex w-fit items-center gap-2 rounded-md border px-2 py-1 transition-all ${
-        isError
-          ? "border-red-500/40 bg-red-500/10"
-          : isSuccess
-            ? "border-emerald-500/40 bg-emerald-500/10"
-            : "border-[#8A87F8]/40 bg-[#8A87F8]/10"
+        finished
+          ? "border-emerald-500/40 bg-emerald-500/10"
+          : "border-[#8A87F8]/40 bg-[#8A87F8]/10"
       }`}
     >
-      {isError ? (
-        <CircleX className="size-3.5 shrink-0 text-red-400" strokeWidth={2} />
-      ) : isSuccess ? (
+      {finished ? (
         CheckIcon
-      ) : isPending ? (
-        <span className="inline-block size-3.5 shrink-0 animate-pulse rounded-full bg-[#8A87F8]/80" />
       ) : (
-        <span className="inline-block size-3.5 shrink-0 rounded-full bg-white/40" />
+        <span className="inline-block size-3.5 shrink-0 animate-pulse rounded-full bg-[#8A87F8]/80" />
       )}
       <span
         className={`font-mono text-[11px] uppercase tracking-wider ${
-          isError
-            ? "text-red-300"
-            : isSuccess
-              ? "text-emerald-300"
-              : "text-white/90"
+          finished ? "text-emerald-300" : "text-white/90"
         }`}
       >
-        {step.label}
+        {label}
       </span>
-    </div>
-  );
-}
-
-function PlanningStepsBlock({ steps }: { steps: PlanningStep[] }) {
-  return (
-    <div className="flex w-full justify-start">
-      <div className="flex flex-col gap-1.5">
-        {steps.map((step) => (
-          <PlanningStepChip key={step.stepId} step={step} />
-        ))}
-      </div>
     </div>
   );
 }
@@ -209,121 +243,38 @@ function ReasoningBlock({
   );
 }
 
-function isToolPartType(type: string): boolean {
-  return (
-    type.startsWith("tool-") && type !== "tool-invocation" && type !== "tool"
-  );
-}
-
-function extractToolName(partType: string): string {
-  return partType.replace(/^tool-/, "");
-}
-
-function isToolFinished(state: string | undefined): boolean {
-  return (
-    state === "output-available" ||
-    state === "output-error" ||
-    state === "output-denied"
-  );
-}
-
-function isToolErrored(state: string | undefined): boolean {
-  return state === "output-error" || state === "output-denied";
-}
-
-function isToolInProgress(state: string | undefined): boolean {
-  return (
-    state === "input-streaming" ||
-    state === "input-available" ||
-    state === undefined
-  );
-}
-
-function ToolCallChip({
-  tool,
-  frames,
-}: {
-  tool: MessagePart;
-  frames: { id: string; label: string }[];
-}) {
-  const toolName = extractToolName(tool.type);
-  const finished = isToolFinished(tool.state);
-  const errored = isToolErrored(tool.state);
-  const inProgress = isToolInProgress(tool.state);
-  const label = getToolDisplayLabel(toolName, frames, tool.input, finished);
-
-  return (
-    <div
-      className={`not-prose flex w-fit items-center gap-2 rounded-md border px-2 py-1 transition-all ${
-        errored
-          ? "border-red-500/40 bg-red-500/10"
-          : finished
-            ? "border-emerald-500/40 bg-emerald-500/10"
-            : "border-[#8A87F8]/40 bg-[#8A87F8]/10"
-      }`}
-    >
-      {errored ? (
-        <CircleX className="size-3.5 shrink-0 text-red-400" strokeWidth={2} />
-      ) : finished ? (
-        CheckIcon
-      ) : inProgress ? (
-        <span className="inline-block size-3.5 shrink-0 animate-pulse rounded-full bg-[#8A87F8]/80" />
-      ) : (
-        <span className="inline-block size-3.5 shrink-0 rounded-full bg-white/40" />
-      )}
-      <span
-        className={`font-mono text-[11px] uppercase tracking-wider ${
-          errored
-            ? "text-red-300"
-            : finished
-              ? "text-emerald-300"
-              : "text-white/90"
-        }`}
-      >
-        {label}
-      </span>
-    </div>
-  );
-}
-
 function AssistantMessageContent({
   parts,
   frames,
   isStreaming,
+  toolSteps = [],
 }: {
   parts: MessagePart[];
   frames: { id: string; label: string }[];
   isStreaming?: boolean;
+  toolSteps?: ToolStep[];
 }) {
   const blocks: Array<
-    | { kind: "text"; text: string }
-    | { kind: "reasoning"; text: string }
-    | { kind: "tools"; tools: MessagePart[] }
+    { kind: "text"; text: string } | { kind: "reasoning"; text: string }
   > = [];
 
-  let i = 0;
-  while (i < parts.length) {
-    const part = parts[i];
+  for (const part of parts) {
     if (part.type === "text") {
       blocks.push({ kind: "text", text: part.text ?? "" });
-      i++;
     } else if (part.type === "reasoning") {
       blocks.push({ kind: "reasoning", text: part.text ?? "" });
-      i++;
-    } else if (isToolPartType(part.type)) {
-      const toolGroup: MessagePart[] = [];
-      while (i < parts.length && isToolPartType(parts[i].type)) {
-        toolGroup.push(parts[i]);
-        i++;
-      }
-      blocks.push({ kind: "tools", tools: toolGroup });
-    } else {
-      i++;
     }
   }
 
   return (
     <div className="space-y-3">
+      {toolSteps.length > 0 && (
+        <div className="flex flex-col gap-2 shrink-0">
+          {toolSteps.map((step) => (
+            <ToolStepChip key={step.toolCallId} step={step} frames={frames} />
+          ))}
+        </div>
+      )}
       {blocks.map((block, bi) =>
         block.kind === "text" ? (
           block.text ? (
@@ -333,23 +284,13 @@ function AssistantMessageContent({
               </ReactMarkdown>
             </div>
           ) : null
-        ) : block.kind === "reasoning" ? (
+        ) : (
           <ReasoningBlock
             key={bi}
             text={block.text}
             isStreaming={isStreaming}
             isComplete={!isStreaming || bi < blocks.length - 1}
           />
-        ) : (
-          <div key={bi} className="flex flex-col gap-2">
-            {block.tools.map((tool, ti) => (
-              <ToolCallChip
-                key={tool.toolCallId ?? ti}
-                tool={tool}
-                frames={frames}
-              />
-            ))}
-          </div>
         ),
       )}
     </div>
@@ -472,7 +413,7 @@ export function ChatPanel({
   const [isResizing, setIsResizing] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
-  const [planningSteps, setPlanningSteps] = useState<PlanningStep[]>([]);
+  const [toolSteps, _setToolSteps] = useState<ToolStep[]>([]);
   const chatThreadRef = useRef<HTMLDivElement>(null);
   const selectedFrameIds = useAppSelector((s) => s.canvas.selectedFrameIds);
   const frames = useAppSelector((s) => s.canvas.frames);
@@ -483,122 +424,29 @@ export function ChatPanel({
       : frameName;
 
   const stateRef = useRef({ frames, theme });
+  const toolStepsRef = useRef<ToolStep[]>([]);
+  const [lastMessageToolSteps, setLastMessageToolSteps] = useState<ToolStep[]>(
+    [],
+  );
+
+  const setToolSteps = useCallback(
+    (updater: ToolStep[] | ((prev: ToolStep[]) => ToolStep[])) => {
+      _setToolSteps((prev) => {
+        const next = typeof updater === "function" ? updater(prev) : updater;
+        toolStepsRef.current = next;
+        return next;
+      });
+    },
+    [],
+  );
+
   useEffect(() => {
     stateRef.current = { frames, theme };
     latestCanvasState.frames = frames;
     latestCanvasState.theme = theme;
   }, [frames, theme]);
-  const hasHydratedFromProject = useRef(false);
 
-  const handleFrameAction = useCallback(
-    (data: {
-      action: string;
-      payload?: {
-        id?: string;
-        label?: string;
-        left?: number;
-        top?: number;
-        html?: string;
-        updates?: Record<string, string>;
-        theme?: Record<string, string>;
-      };
-    }) => {
-      if (!data?.action) return;
-      switch (data.action) {
-        case "add":
-          if (data.payload?.id && data.payload?.label !== undefined) {
-            dispatch(
-              addFrameWithId({
-                id: data.payload.id,
-                label: data.payload.label,
-                left: data.payload.left ?? 0,
-                top: data.payload.top ?? 0,
-                html: data.payload.html ?? "",
-              }),
-            );
-            if (data.payload.html && data.payload.html.length > 0) {
-              fetch("/api/frames", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  frameId: data.payload.id,
-                  html: data.payload.html,
-                  label: data.payload.label,
-                  left: data.payload.left,
-                  top: data.payload.top,
-                }),
-              }).catch(() => {});
-            }
-          }
-          break;
-        case "updateHtml":
-          if (data.payload?.id && data.payload?.html !== undefined) {
-            dispatch(
-              updateFrameHtml({ id: data.payload.id, html: data.payload.html }),
-            );
-            if (data.payload.html.length > 0) {
-              const frame = stateRef.current.frames.find(
-                (f) => f.id === data.payload?.id,
-              );
-              fetch("/api/frames", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  frameId: data.payload.id,
-                  html: data.payload.html,
-                  label: frame?.label,
-                  left: frame?.left,
-                  top: frame?.top,
-                }),
-              }).catch(() => {});
-            }
-          }
-          break;
-        case "updateFrame":
-          if (data.payload?.id) {
-            const changes: { label?: string; html?: string } = {};
-            if (data.payload.label !== undefined)
-              changes.label = data.payload.label;
-            if (data.payload.html !== undefined)
-              changes.html = data.payload.html;
-            if (Object.keys(changes).length > 0) {
-              dispatch(updateFrame({ id: data.payload.id, changes }));
-              if (
-                data.payload.html !== undefined &&
-                data.payload.html.length > 0
-              ) {
-                const frame = stateRef.current.frames.find(
-                  (f) => f.id === data.payload?.id,
-                );
-                fetch("/api/frames", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    frameId: data.payload.id,
-                    html: data.payload.html,
-                    label: frame?.label ?? data.payload.label,
-                    left: frame?.left ?? data.payload.left,
-                    top: frame?.top ?? data.payload.top,
-                  }),
-                }).catch(() => {});
-              }
-            }
-          }
-          break;
-        case "setTheme":
-          if (data.payload?.updates) {
-            dispatch(setTheme(data.payload.updates));
-          }
-          break;
-        case "replaceTheme":
-          if (data.payload?.theme) {
-            dispatch(replaceTheme(data.payload.theme));
-          }
-          break;
-      }
-    },
-    [dispatch],
-  );
+  const hasHydratedFromProject = useRef(false);
 
   const [transport] = useState(
     () =>
@@ -621,85 +469,226 @@ export function ChatPanel({
   const { messages, setMessages, sendMessage, status } = useChat({
     transport,
     onData: (dataPart) => {
-      const ev = dataPart as unknown as {
+      interface DataPartEvent {
         type: string;
-        data?: unknown;
-        frame?: {
-          id: string;
-          label: string;
-          left: number;
-          top: number;
-          html?: string;
+        toolCallId?: string;
+        toolName?: string;
+        input?: Record<string, JsonValue>;
+        data?: {
+          toolCallId: string;
+          toolName: string;
+          frame?: {
+            id: string;
+            label?: string;
+            left?: number;
+            top?: number;
+            html?: string;
+          };
+          theme?: Record<string, string>;
+          themeUpdates?: Record<string, string>;
         };
-        theme?: Record<string, string>;
-      };
-      if (ev.type === "data-step-result") {
-        const stepData = ev.data as { stepId?: string; status?: string };
-        const id = stepData.stepId;
-        if (!id) return;
-        const isSuccess = stepData.status === "success";
-        setPlanningSteps((prev) => {
-          const existing = prev.find((s) => s.stepId === id);
-          if (existing) {
-            return prev.map((s) =>
-              s.stepId === id
-                ? {
-                    ...s,
-                    status: isSuccess
-                      ? ("success" as const)
-                      : ("error" as const),
-                  }
-                : s,
+      }
+      const ev = dataPart as DataPartEvent;
+
+      const toolCallId = ev.toolCallId ?? ev.data?.toolCallId;
+      const toolName = ev.toolName ?? ev.data?.toolName;
+
+      if (ev.type === "tool-input-start" && toolCallId && toolName) {
+        setToolSteps((prev) =>
+          addStepIfNew(prev, { toolCallId, toolName, state: "running" }),
+        );
+        return;
+      }
+      if (ev.type === "tool-output-available" && toolCallId) {
+        setToolSteps((prev) =>
+          prev.map((s) =>
+            s.toolCallId === toolCallId ? { ...s, state: "done" as const } : s,
+          ),
+        );
+        return;
+      }
+      if (ev.type === "tool-input-available" && ev.toolCallId && ev.input) {
+        const input = ev.input as { id?: string; name?: string };
+        setToolSteps((prev) =>
+          prev.map((s) =>
+            s.toolCallId === ev.toolCallId
+              ? { ...s, input: { id: input.id, name: input.name } }
+              : s,
+          ),
+        );
+        return;
+      }
+
+      // ─── Custom data events ──────────────────────────────────────────────
+      if (!ev.data) return;
+      const { data } = ev;
+
+      if (ev.type === "data-tool-call-start") {
+        setToolSteps((prev) =>
+          addStepIfNew(prev, {
+            toolCallId: data.toolCallId,
+            toolName: data.toolName,
+            state: "running",
+          }),
+        );
+        if (data.toolName === "create_screen" && data.frame) {
+          dispatch(
+            addFrameWithId({
+              id: data.frame.id,
+              label: data.frame.label ?? "",
+              left: data.frame.left ?? 0,
+              top: data.frame.top ?? 0,
+              html: data.frame.html ?? "",
+            }),
+          );
+        }
+        return;
+      }
+
+      if (ev.type === "data-tool-call-delta") {
+        if (data.toolName === "create_screen" && data.frame) {
+          const changes: { label?: string; html?: string } = {};
+          if (data.frame.label !== undefined) changes.label = data.frame.label;
+          if (data.frame.html !== undefined) changes.html = data.frame.html;
+          if (Object.keys(changes).length > 0) {
+            dispatch(updateFrame({ id: data.frame.id, changes }));
+          }
+          if (data.frame.label) {
+            setToolSteps((prev) =>
+              prev.map((s) =>
+                s.toolCallId === data.toolCallId
+                  ? { ...s, input: { ...s.input, name: data.frame!.label } }
+                  : s,
+              ),
             );
           }
-          return [
-            ...prev,
-            {
-              stepId: id,
-              label: PLANNING_STEP_LABELS[id] ?? id,
-              status: isSuccess ? ("success" as const) : ("pending" as const),
-            },
-          ];
-        });
-        return;
-      }
-      if (ev.type === "data-step-start") {
-        return;
-      }
-      if (ev.type === "data-frame-action" && ev.data) {
-        handleFrameAction(ev.data as Parameters<typeof handleFrameAction>[0]);
-        return;
-      }
-      if (ev.type === "create_screen_frame" && ev.frame) {
-        const { frame } = ev;
-        handleFrameAction({
-          action: frame.html ? "updateFrame" : "add",
-          payload: {
-            id: frame.id,
-            label: frame.label,
-            left: frame.left,
-            top: frame.top,
-            html: frame.html ?? "",
-          },
-        });
-        return;
-      }
-      if (ev.type === "tool-call-end") {
-        if (ev.frame?.id && ev.frame?.html !== undefined) {
-          handleFrameAction({
-            action: "updateHtml",
-            payload: { id: ev.frame.id, html: ev.frame.html },
-          });
+        } else if (
+          data.toolName === "update_screen" &&
+          data.frame?.html !== undefined
+        ) {
+          dispatch(
+            updateFrameHtml({ id: data.frame.id, html: data.frame.html }),
+          );
         }
-        if (ev.theme && Object.keys(ev.theme).length > 0) {
-          handleFrameAction({
-            action: "replaceTheme",
-            payload: { theme: ev.theme },
-          });
+        return;
+      }
+
+      if (ev.type === "data-tool-call-end") {
+        const endInput: { id?: string; name?: string } = {};
+        if (data.frame?.id) endInput.id = data.frame.id;
+        if (data.frame?.label) endInput.name = data.frame.label;
+        setToolSteps((prev) =>
+          prev.map((s) =>
+            s.toolCallId === data.toolCallId
+              ? {
+                  ...s,
+                  state: "done" as const,
+                  input: { ...s.input, ...endInput },
+                }
+              : s,
+          ),
+        );
+        if (data.toolName === "create_screen" && data.frame) {
+          dispatch(
+            addFrameWithId({
+              id: data.frame.id,
+              label: data.frame.label ?? "",
+              left: data.frame.left ?? 0,
+              top: data.frame.top ?? 0,
+              html: data.frame.html ?? "",
+            }),
+          );
+          dispatch(
+            updateFrame({
+              id: data.frame.id,
+              changes: {
+                label: data.frame.label,
+                html: data.frame.html,
+              },
+            }),
+          );
+          if (data.frame.html && data.frame.html.length > 0) {
+            fetch("/api/frames", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                frameId: data.frame.id,
+                html: data.frame.html,
+                label: data.frame.label,
+                left: data.frame.left,
+                top: data.frame.top,
+              }),
+            }).catch(() => {});
+          }
+        } else if (
+          (data.toolName === "update_screen" ||
+            data.toolName === "edit_screen") &&
+          data.frame?.html !== undefined
+        ) {
+          dispatch(
+            updateFrameHtml({ id: data.frame.id, html: data.frame.html }),
+          );
+          const frame = stateRef.current.frames.find(
+            (f) => f.id === data.frame?.id,
+          );
+          fetch("/api/frames", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              frameId: data.frame.id,
+              html: data.frame.html,
+              label: frame?.label,
+              left: frame?.left,
+              top: frame?.top,
+            }),
+          }).catch(() => {});
+        } else if (data.toolName === "update_theme" && data.themeUpdates) {
+          dispatch(setTheme(data.themeUpdates));
+        } else if (data.toolName === "build_theme" && data.theme) {
+          dispatch(replaceTheme(data.theme));
         }
+        return;
       }
     },
     onFinish: ({ messages: finishedMessages, isAbort, isError }) => {
+      const stepsToPersist = toolStepsRef.current;
+      setToolSteps([]);
+      if (
+        !isAbort &&
+        !isError &&
+        finishedMessages.length > 0 &&
+        stepsToPersist.length > 0
+      ) {
+        setLastMessageToolSteps([...stepsToPersist]);
+        const lastIdx = finishedMessages.length - 1;
+        const lastMsg = finishedMessages[lastIdx];
+        if (lastMsg?.role === "assistant") {
+          const stepParts = stepsToPersist.map((s) => ({
+            type: TOOL_STEP_PART_TYPE,
+            toolCallId: s.toolCallId,
+            toolName: s.toolName,
+            state: s.state,
+            input: s.input,
+          }));
+          const existingParts = (
+            (lastMsg as { parts?: MessagePart[] }).parts ?? []
+          ).filter((p) => p.type !== TOOL_STEP_PART_TYPE);
+          const updated = [...finishedMessages];
+          updated[lastIdx] = {
+            ...lastMsg,
+            parts: [...stepParts, ...existingParts],
+          } as typeof lastMsg;
+          setMessages(updated);
+          fetch("/api/chat/sessions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messages: updated }),
+          }).catch(() => {});
+          return;
+        }
+      } else {
+        setLastMessageToolSteps([]);
+      }
       if (!isAbort && !isError && finishedMessages.length > 0) {
         fetch("/api/chat/sessions", {
           method: "POST",
@@ -781,11 +770,12 @@ export function ChatPanel({
     (e?: React.FormEvent) => {
       e?.preventDefault();
       if (!inputValue.trim()) return;
-      setPlanningSteps([]);
+      setToolSteps([]);
+      setLastMessageToolSteps([]);
       sendMessage({ text: inputValue.trim() });
       setInputValue("");
     },
-    [inputValue, sendMessage],
+    [inputValue, sendMessage, setToolSteps],
   );
 
   useEffect(() => {
@@ -793,9 +783,40 @@ export function ChatPanel({
       top: chatThreadRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [messages, planningSteps]);
+  }, [messages, toolSteps]);
 
   if (!isVisible) return null;
+
+  const isActivelyStreaming = status === "submitted" || status === "streaming";
+
+  const lastMsg = messages[messages.length - 1];
+  const lastMsgIsAssistant = lastMsg?.role === "assistant";
+
+  const assistantBubbleAlreadyVisible =
+    isActivelyStreaming && lastMsgIsAssistant;
+
+  const showPendingBubble =
+    isActivelyStreaming &&
+    toolSteps.length > 0 &&
+    !assistantBubbleAlreadyVisible;
+
+  const lastMsgHasContent =
+    lastMsgIsAssistant &&
+    ((lastMsg.parts ?? []).some(
+      (p) =>
+        (p as MessagePart).type === "text" ||
+        (p as MessagePart).type === "reasoning" ||
+        (p as MessagePart).type?.startsWith?.("tool-") ||
+        (p as MessagePart).type === "dynamic-tool",
+    ) ||
+      typeof (lastMsg as { content?: string }).content === "string");
+
+  const showStreamingIndicator =
+    isActivelyStreaming &&
+    toolSteps.length === 0 &&
+    !showPendingBubble &&
+    !lastMsgHasContent;
+  // ─────────────────────────────────────────────────────────────────────────────
 
   return (
     <div
@@ -837,6 +858,7 @@ export function ChatPanel({
         className="min-h-0 flex-1 space-y-4 overflow-y-auto scrollbar-hide p-2"
       >
         {isLoadingHistory && <ChatHistoryShimmer />}
+
         {!isLoadingHistory &&
           messages.map(
             (
@@ -853,27 +875,49 @@ export function ChatPanel({
               msgIndex: number,
             ) => {
               const isLastMessage = msgIndex === messages.length - 1;
+              const stepsFromParts =
+                msg.role === "assistant"
+                  ? toolStepsFromParts(msg.parts as MessagePart[])
+                  : undefined;
+
+              const liveToolSteps =
+                isLastMessage && isActivelyStreaming ? toolSteps : undefined;
+
+              const fallbackPersisted =
+                msg.role === "assistant" && isLastMessage
+                  ? lastMessageToolSteps
+                  : undefined;
+
+              const stepsForMessage =
+                liveToolSteps && liveToolSteps.length > 0
+                  ? liveToolSteps
+                  : (stepsFromParts ??
+                    (fallbackPersisted?.length
+                      ? fallbackPersisted
+                      : undefined));
+
+              const isStreamingLastAssistant =
+                isLastMessage &&
+                msg.role === "assistant" &&
+                isActivelyStreaming;
+
               const hasVisibleContent =
+                isStreamingLastAssistant ||
                 msg.role !== "assistant" ||
                 (msg.parts ?? []).some(
                   (p) =>
                     p.type === "text" ||
                     p.type === "reasoning" ||
-                    isToolPartType(p.type),
+                    (p as MessagePart).type?.startsWith?.("tool-") ||
+                    (p as MessagePart).type === "dynamic-tool",
                 ) ||
-                typeof msg.content === "string";
-              if (!hasVisibleContent) return null;
+                typeof msg.content === "string" ||
+                (stepsForMessage && stepsForMessage.length > 0);
 
-              const showPlanningBeforeThis =
-                planningSteps.length > 0 &&
-                msg.role === "assistant" &&
-                isLastMessage;
+              if (!hasVisibleContent) return null;
 
               return (
                 <Fragment key={msg.id}>
-                  {showPlanningBeforeThis && (
-                    <PlanningStepsBlock steps={planningSteps} />
-                  )}
                   <div
                     className={`flex w-full ${
                       msg.role === "user" ? "justify-end" : "justify-start"
@@ -901,6 +945,7 @@ export function ChatPanel({
                             isStreaming={
                               status === "streaming" && isLastMessage
                             }
+                            toolSteps={stepsForMessage}
                           />
                         ) : typeof msg.content === "string" ? (
                           <div className="chat-markdown">
@@ -908,6 +953,19 @@ export function ChatPanel({
                               {msg.content}
                             </ReactMarkdown>
                           </div>
+                        ) : stepsForMessage && stepsForMessage.length > 0 ? (
+                          <AssistantMessageContent
+                            parts={[]}
+                            frames={frames}
+                            isStreaming={
+                              status === "streaming" && isLastMessage
+                            }
+                            toolSteps={stepsForMessage}
+                          />
+                        ) : isStreamingLastAssistant ? (
+                          <span className="inline-block animate-pulse text-white/40 text-xs">
+                            …
+                          </span>
                         ) : null
                       ) : msg.role === "user" ? (
                         getUserMessageText(msg)
@@ -918,15 +976,30 @@ export function ChatPanel({
               );
             },
           )}
-        {planningSteps.length > 0 &&
-          (status === "submitted" || status === "streaming") &&
-          (messages.length === 0 ||
-            messages[messages.length - 1]?.role !== "assistant") && (
-            <PlanningStepsBlock steps={planningSteps} />
-          )}
-        {(status === "submitted" || status === "streaming") && (
-          <StreamingActivityIndicator />
+
+        {/*
+         * ─── FIX: Pending assistant bubble ────────────────────────────────────
+         * Rendered when tool steps are live but the AI SDK hasn't yet added an
+         * assistant message to the `messages` array (this happens during the
+         * planning phase: classifyIntent → planScreens → planStyle → build_theme
+         * before any text streams in). Without this bubble the chips are
+         * calculated but have nowhere to render, so nothing shows until refresh.
+         */}
+        {showPendingBubble && (
+          <div className="flex w-full justify-start">
+            <div className="w-full rounded-lg bg-muted/50 px-3 py-2.5 text-sm text-stone-300">
+              <AssistantMessageContent
+                parts={[]}
+                frames={frames}
+                isStreaming={status === "streaming"}
+                toolSteps={toolSteps}
+              />
+            </div>
+          </div>
         )}
+
+        {/* "Working…" spinner — only when no steps and no content yet */}
+        {showStreamingIndicator && <StreamingActivityIndicator />}
       </div>
 
       <div className="w-full p-4">
@@ -979,7 +1052,7 @@ export function ChatPanel({
                 handleSend();
               }
             }}
-            disabled={status === "submitted" || status === "streaming"}
+            disabled={isActivelyStreaming}
             className="text-sm"
           />
           <div className="flex items-center justify-between p-2">
@@ -992,11 +1065,7 @@ export function ChatPanel({
             </button>
             <button
               type="submit"
-              disabled={
-                !inputValue.trim() ||
-                status === "submitted" ||
-                status === "streaming"
-              }
+              disabled={!inputValue.trim() || isActivelyStreaming}
               className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-[#8A87F8] text-white shadow-xs outline-none transition-colors hover:bg-[#8A87F8]/90 disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-95"
             >
               <svg

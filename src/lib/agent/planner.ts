@@ -12,6 +12,37 @@ const PLANNER_SCREENS_PROMPT =
 const PLANNER_STYLE_PROMPT =
   "Given a user request and the screens to create, provide visual guidelines (colors, mood, typography) and whether to generate (true for new designs).";
 
+let planCallCounter = 0;
+
+function nextPlanCallId(step: string): string {
+  return `plan-${step}-${++planCallCounter}`;
+}
+
+function emitPlanStart(
+  writer: UIMessageStreamWriter,
+  toolCallId: string,
+  toolName: string,
+) {
+  writer.write({
+    type: "tool-input-start",
+    toolCallId,
+    toolName,
+  });
+}
+
+function emitPlanEnd(
+  writer: UIMessageStreamWriter,
+  toolCallId: string,
+  _toolName: string,
+  _output: object,
+) {
+  writer.write({
+    type: "tool-output-available",
+    toolCallId,
+    output: _output,
+  });
+}
+
 export async function runPlanningPipeline(
   userPrompt: string,
   vertex: GoogleVertexProvider,
@@ -19,24 +50,20 @@ export async function runPlanningPipeline(
 ): Promise<string> {
   try {
     // Step 1: classifyIntent
+    const classifyId = nextPlanCallId("classifyIntent");
+    emitPlanStart(writer, classifyId, "classifyIntent");
     const classify = await generateObject({
       model: vertex("gemini-2.0-flash"),
       schema: z.object({ intent: z.enum(["generate", "edit"]) }),
       prompt: `${PLANNER_CLASSIFY_PROMPT}\n\nUser request:\n${userPrompt}`,
     });
     const intent = classify.object.intent;
-    writer.write({
-      type: "data-step-result",
-      id: "classifyIntent",
-      data: {
-        result: { intent },
-        status: "success",
-        stepId: "classifyIntent",
-      },
-    });
+    emitPlanEnd(writer, classifyId, "classifyIntent", { intent });
 
     // Step 2: planScreens (only if generate)
     let screens: Array<{ name: string; description: string }> = [];
+    const screensId = nextPlanCallId("planScreens");
+    emitPlanStart(writer, screensId, "planScreens");
     if (intent === "generate") {
       const screensPlan = await generateObject({
         model: vertex("gemini-2.0-flash"),
@@ -52,17 +79,11 @@ export async function runPlanningPipeline(
       });
       screens = screensPlan.object.screens;
     }
-    writer.write({
-      type: "data-step-result",
-      id: "planScreens",
-      data: {
-        result: { screens },
-        status: "success",
-        stepId: "planScreens",
-      },
-    });
+    emitPlanEnd(writer, screensId, "planScreens", { screens });
 
     // Step 3: planStyle
+    const styleId = nextPlanCallId("planStyle");
+    emitPlanStart(writer, styleId, "planStyle");
     const stylePlan = await generateObject({
       model: vertex("gemini-2.0-flash"),
       schema: z.object({
@@ -72,20 +93,7 @@ export async function runPlanningPipeline(
       prompt: `${PLANNER_STYLE_PROMPT}\n\nUser request:\n${userPrompt}\n\nScreens: ${JSON.stringify(screens)}\n\nOutput visual guidelines and whether to generate (true for new designs).`,
     });
     const { guidelines, shouldGenerate } = stylePlan.object;
-    writer.write({
-      type: "data-step-result",
-      id: "planStyle",
-      data: {
-        result: { guidelines, shouldGenerate },
-        status: "success",
-        stepId: "planStyle",
-      },
-    });
-
-    writer.write({
-      type: "data-step-start",
-      data: {},
-    });
+    emitPlanEnd(writer, styleId, "planStyle", { guidelines, shouldGenerate });
 
     return `## Planning (from pipeline)\n- Intent: ${intent}\n- Screens to create: ${JSON.stringify(screens, null, 2)}\n- Visual guidelines: ${guidelines}\n`;
   } catch {

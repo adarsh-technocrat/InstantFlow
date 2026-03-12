@@ -3,9 +3,9 @@
  * Factory function creates tools with closures over mutable state.
  */
 
-import { tool, type UIMessageStreamWriter } from "ai";
+import { tool } from "ai";
+import type { UIMessageStreamWriter } from "ai";
 import { z } from "zod";
-import type { GoogleVertexProvider } from "@ai-sdk/google-vertex";
 import {
   wrapScreenBody,
   extractBodyContent,
@@ -31,16 +31,14 @@ export interface FrameState {
 export interface ToolContext {
   frames: FrameState[];
   theme: ThemeVariables;
-  imageMap: Record<string, string>;
-  writer: UIMessageStreamWriter;
-  vertex: GoogleVertexProvider;
+  writer?: UIMessageStreamWriter;
 }
 
 const FRAME_SPACING = 420;
 const STREAM_THROTTLE_MS = 120;
 
 export function createTools(ctx: ToolContext) {
-  const { frames, theme, imageMap, writer } = ctx;
+  const { frames, theme, writer } = ctx;
 
   const createScreenStreamState = new Map<string, CreateScreenStreamState>();
   const updateScreenStreamState = new Map<string, UpdateScreenStreamState>();
@@ -50,10 +48,23 @@ export function createTools(ctx: ToolContext) {
       description:
         "Returns the current HTML of a screen. Call this before editing. id must be from the Current Screens table in the system context.",
       inputSchema: z.object({ id: z.string() }),
-      execute: async ({ id }: { id: string }) => {
+      onInputStart: ({ toolCallId }) => {
+        writer?.write({
+          type: "tool-input-start",
+          toolCallId,
+          toolName: "read_screen",
+        });
+      },
+      execute: async ({ id }: { id: string }, { toolCallId }) => {
         const frame = frames.find((f) => f.id === id);
         const html = frame?.html ? extractBodyContent(frame.html) : "";
-        return html || "(empty screen)";
+        const result = html || "(empty screen)";
+        writer?.write({
+          type: "tool-output-available",
+          toolCallId,
+          output: result,
+        });
+        return result;
       },
     }),
 
@@ -61,7 +72,22 @@ export function createTools(ctx: ToolContext) {
       description:
         "Returns current CSS theme variables and fonts. No arguments needed.",
       inputSchema: z.object({}),
-      execute: async () => JSON.stringify(theme, null, 2),
+      onInputStart: ({ toolCallId }) => {
+        writer?.write({
+          type: "tool-input-start",
+          toolCallId,
+          toolName: "read_theme",
+        });
+      },
+      execute: async (_, { toolCallId }) => {
+        const result = JSON.stringify(theme, null, 2);
+        writer?.write({
+          type: "tool-output-available",
+          toolCallId,
+          output: result,
+        });
+        return result;
+      },
     }),
 
     create_screen: tool({
@@ -72,6 +98,11 @@ export function createTools(ctx: ToolContext) {
         screen_html: z.string().describe("HTML for body content only"),
       }),
       onInputStart: ({ toolCallId }) => {
+        writer?.write({
+          type: "tool-input-start",
+          toolCallId,
+          toolName: "create_screen",
+        });
         createScreenStreamState.set(toolCallId, {
           buffer: "",
           lastEmit: 0,
@@ -87,14 +118,6 @@ export function createTools(ctx: ToolContext) {
           left,
           top,
           html: "",
-        });
-        writer.write({
-          type: "data-frame-action",
-          data: {
-            action: "add",
-            payload: { id: frameId, label: "Loading…", left, top, html: "" },
-          },
-          transient: true,
         });
       },
       onInputDelta: ({ toolCallId, inputTextDelta }) => {
@@ -134,37 +157,17 @@ export function createTools(ctx: ToolContext) {
         }
         if (changed) {
           state.lastEmit = now;
-          writer.write({
-            type: "data-frame-action",
-            data: {
-              action: "updateFrame",
-              payload: { id: toolCallId, html: frame.html, label: frame.label },
-            },
-            transient: true,
-          });
         }
       },
       execute: async (
         { name, screen_html }: { name: string; screen_html: string },
         { toolCallId },
       ) => {
-        let html = screen_html;
-        for (const [id, url] of Object.entries(imageMap)) {
-          html = html.replace(new RegExp(`placeholder:${id}`, "g"), url);
-        }
-        const wrappedHtml = wrapScreenBody(html, theme);
+        const wrappedHtml = wrapScreenBody(screen_html, theme);
         const frame = frames.find((f) => f.id === toolCallId);
         if (frame) {
           frame.label = name;
           frame.html = wrappedHtml;
-          writer.write({
-            type: "data-frame-action",
-            data: {
-              action: "updateFrame",
-              payload: { id: toolCallId, html: wrappedHtml, label: name },
-            },
-            transient: true,
-          });
         } else {
           const lastFrame = frames[frames.length - 1];
           const left = lastFrame ? lastFrame.left + FRAME_SPACING : 0;
@@ -176,27 +179,19 @@ export function createTools(ctx: ToolContext) {
             top,
             html: wrappedHtml,
           });
-          writer.write({
-            type: "data-frame-action",
-            data: {
-              action: "add",
-              payload: {
-                id: toolCallId,
-                label: name,
-                left,
-                top,
-                html: wrappedHtml,
-              },
-            },
-            transient: true,
-          });
         }
         createScreenStreamState.delete(toolCallId);
-        return {
+        const result = {
           success: true,
           id: toolCallId,
           message: `Created screen "${name}"`,
         };
+        writer?.write({
+          type: "tool-output-available",
+          toolCallId,
+          output: result,
+        });
+        return result;
       },
     }),
 
@@ -208,6 +203,11 @@ export function createTools(ctx: ToolContext) {
         screen_html: z.string().describe("HTML for body content only"),
       }),
       onInputStart: ({ toolCallId }) => {
+        writer?.write({
+          type: "tool-input-start",
+          toolCallId,
+          toolName: "update_screen",
+        });
         updateScreenStreamState.set(toolCallId, {
           buffer: "",
           lastEmit: 0,
@@ -226,37 +226,23 @@ export function createTools(ctx: ToolContext) {
         const wrappedHtml = wrapScreenBody(parsed.screen_html, theme);
         frame.html = wrappedHtml;
         state.lastEmit = now;
-        writer.write({
-          type: "data-frame-action",
-          data: {
-            action: "updateHtml",
-            payload: { id: parsed.id, html: wrappedHtml },
-          },
-          transient: true,
-        });
       },
       execute: async (
         { id, screen_html }: { id: string; screen_html: string },
         { toolCallId },
       ) => {
         updateScreenStreamState.delete(toolCallId);
-        let html = screen_html;
-        for (const [imgId, url] of Object.entries(imageMap)) {
-          html = html.replace(new RegExp(`placeholder:${imgId}`, "g"), url);
-        }
         const frame = frames.find((f) => f.id === id);
         if (frame) {
-          frame.html = wrapScreenBody(html, theme);
-          writer.write({
-            type: "data-frame-action",
-            data: {
-              action: "updateHtml",
-              payload: { id, html: frame.html },
-            },
-            transient: true,
-          });
+          frame.html = wrapScreenBody(screen_html, theme);
         }
-        return { success: true };
+        const result = { success: true };
+        writer?.write({
+          type: "tool-output-available",
+          toolCallId,
+          output: result,
+        });
+        return result;
       },
     }),
 
@@ -268,34 +254,57 @@ export function createTools(ctx: ToolContext) {
         find: z.string().describe("Exact string to find (from read_screen)"),
         replace: z.string().describe("Replacement string"),
       }),
-      execute: async ({
-        id,
-        find,
-        replace,
-      }: {
-        id: string;
-        find: string;
-        replace: string;
-      }) => {
+      onInputStart: ({ toolCallId }) => {
+        writer?.write({
+          type: "tool-input-start",
+          toolCallId,
+          toolName: "edit_screen",
+        });
+      },
+      execute: async (
+        {
+          id,
+          find,
+          replace,
+        }: {
+          id: string;
+          find: string;
+          replace: string;
+        },
+        { toolCallId },
+      ) => {
         const frame = frames.find((f) => f.id === id);
         if (!frame?.html) {
-          return { success: false, error: "Screen not found" };
+          const err = { success: false, error: "Screen not found" };
+          writer?.write({
+            type: "tool-output-available",
+            toolCallId,
+            output: err,
+          });
+          return err;
         }
         if (!frame.html.includes(find)) {
-          return {
+          const err = {
             success: false,
             error:
               "Find string not found - ensure exact match from read_screen",
           };
+          writer?.write({
+            type: "tool-output-available",
+            toolCallId,
+            output: err,
+          });
+          return err;
         }
         const newHtml = frame.html.replace(find, replace);
         frame.html = newHtml;
-        writer.write({
-          type: "data-frame-action",
-          data: { action: "updateHtml", payload: { id, html: newHtml } },
-          transient: true,
+        const result = { success: true };
+        writer?.write({
+          type: "tool-output-available",
+          toolCallId,
+          output: result,
         });
-        return { success: true };
+        return result;
       },
     }),
 
@@ -307,17 +316,28 @@ export function createTools(ctx: ToolContext) {
           .record(z.string(), z.string())
           .describe("CSS variable names to values"),
       }),
-      execute: async ({ updates }: { updates: Record<string, string> }) => {
+      onInputStart: ({ toolCallId }) => {
+        writer?.write({
+          type: "tool-input-start",
+          toolCallId,
+          toolName: "update_theme",
+        });
+      },
+      execute: async (
+        { updates }: { updates: Record<string, string> },
+        { toolCallId },
+      ) => {
         for (const k of Object.keys(updates)) {
           const v = updates[k];
           if (v !== undefined) theme[k] = String(v);
         }
-        writer.write({
-          type: "data-frame-action",
-          data: { action: "setTheme", payload: { updates } },
-          transient: true,
+        const result = { success: true };
+        writer?.write({
+          type: "tool-output-available",
+          toolCallId,
+          output: result,
         });
-        return { success: true };
+        return result;
       },
     }),
 
@@ -328,37 +348,48 @@ export function createTools(ctx: ToolContext) {
         description: z.string().optional(),
         theme_vars: z.record(z.string(), z.string()),
       }),
-      execute: async ({
-        theme_vars = {},
-      }: {
-        description?: string;
-        theme_vars?: Record<string, string>;
-      }) => {
+      onInputStart: ({ toolCallId }) => {
+        writer?.write({
+          type: "tool-input-start",
+          toolCallId,
+          toolName: "build_theme",
+        });
+      },
+      execute: async (
+        {
+          theme_vars = {},
+        }: {
+          description?: string;
+          theme_vars?: Record<string, string>;
+        },
+        { toolCallId },
+      ) => {
         if (!theme_vars || typeof theme_vars !== "object") {
-          return {
+          const err = {
             success: false,
             error:
               'theme_vars is required. Pass an object like {"--primary":"#2563eb","--background":"#0f172a"}',
           };
+          writer?.write({
+            type: "tool-output-available",
+            toolCallId,
+            output: err,
+          });
+          return err;
         }
         const normalized = normalizeThemeVars(theme_vars);
         for (const k of Object.keys(theme)) delete theme[k];
         for (const [k, v] of Object.entries(normalized)) {
           theme[k] = v;
         }
-        writer.write({
-          type: "data-frame-action",
-          data: {
-            action: "replaceTheme",
-            payload: { theme: { ...theme } },
-          },
-          transient: true,
+        const result = { success: true, message: "Theme built" };
+        writer?.write({
+          type: "tool-output-available",
+          toolCallId,
+          output: result,
         });
-        return { success: true, message: "Theme built" };
+        return result;
       },
     }),
-
-    // TODO: Re-enable with CDN upload — generate image, upload to CDN, return URL
-    // generate_image: tool({ ... }),
   };
 }

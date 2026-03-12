@@ -29,18 +29,14 @@ const vertex = createVertex({
     }),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function hasParts(
-  msg: any,
+  msg: object | null | undefined,
 ): msg is { role: string; parts: Array<{ type: string }> } {
-  return Array.isArray(msg?.parts);
+  return Array.isArray(
+    (msg as { parts?: Array<{ type: string }> } | null)?.parts,
+  );
 }
 
-/**
- * Strip base64 data URIs from message content to prevent bloating the
- * Gemini API request. Works by serializing/deserializing the entire
- * messages array to catch base64 data nested at any depth.
- */
 function stripBase64FromMessages(messages: ModelMessage[]): ModelMessage[] {
   const BASE64_RE = /data:image\/[^;]+;base64,[A-Za-z0-9+/=]{100,}/g;
   const serialized = JSON.stringify(messages);
@@ -63,7 +59,6 @@ export async function POST(req: Request) {
         ? lastMsg.content
         : ((lastMsg?.parts?.[0] as { text?: string })?.text ?? "");
 
-    // Mutable state captured by tool closures
     const frames: FrameState[] = initialFrames.map((f: FrameState) => ({
       id: f.id,
       label: f.label,
@@ -72,27 +67,24 @@ export async function POST(req: Request) {
       html: f.html ?? "",
     }));
     const theme: ThemeVariables = { ...initialTheme };
-    const imageMap: Record<string, string> = {};
 
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
-        writer.write({
-          type: "data-agent-status",
-          data: {
-            status: "received",
-            message: "Request received, AI responding…",
-          },
-          transient: true,
-        });
+        const messageId = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
 
-        // 1. Planning pipeline (if initial request)
+        // Emit start immediately so the client creates the assistant message
+        // before any planning or tool events arrive.
+        writer.write({ type: "start", messageId });
+        writer.write({ type: "start-step" });
+
+        // 1. Planning pipeline (if initial request) — emits data events into the already-started message
         let planContext = "";
         if (isInitialPrompt(frames, theme) && userPrompt.trim()) {
           planContext = await runPlanningPipeline(userPrompt, vertex, writer);
         }
 
-        // 2. Create tools with mutable context
-        const tools = createTools({ frames, theme, imageMap, writer, vertex });
+        // 2. Create tools with mutable context and writer for streaming step events
+        const tools = createTools({ frames, theme, writer });
 
         // 3. Build system prompt
         const system = getSystemPrompt(frames, theme, planContext);
@@ -140,13 +132,15 @@ export async function POST(req: Request) {
         // 5. Strip base64 images from history to avoid Gemini payload limits
         const sanitizedMessages = stripBase64FromMessages(messagesToSend);
 
-        // 6. Run agentic streamText
+        // 6. Run agentic streamText — forward SDK stream as-is (tool-input-*, tool-call, tool-result, etc.)
         const result = streamText({
           model: vertex("gemini-3-pro-preview"),
           system,
           messages: sanitizedMessages,
           tools,
           stopWhen: stepCountIs(10),
+          includeRawChunks: true,
+          maxRetries: 3,
           experimental_repairToolCall: async ({
             toolCall,
             inputSchema,
@@ -180,8 +174,28 @@ export async function POST(req: Request) {
           },
         });
 
-        // 7. Merge into UIMessageStream
-        writer.merge(result.toUIMessageStream());
+        // 7. Forward streamText UI stream, skipping 'start' (already emitted above)
+        const uiStream = result.toUIMessageStream();
+        let skippedFirstStart = false;
+        let skippedFirstStep = false;
+        const filteredStream = uiStream.pipeThrough(
+          new TransformStream({
+            transform(chunk, controller) {
+              const type = (chunk as { type?: string }).type;
+              // Skip the first start & start-step since we already emitted them
+              if (type === "start" && !skippedFirstStart) {
+                skippedFirstStart = true;
+                return;
+              }
+              if (type === "start-step" && !skippedFirstStep) {
+                skippedFirstStep = true;
+                return;
+              }
+              controller.enqueue(chunk);
+            },
+          }),
+        );
+        writer.merge(filteredStream);
       },
     });
 
