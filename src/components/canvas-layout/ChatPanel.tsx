@@ -12,6 +12,14 @@ import {
   setTheme,
   replaceTheme,
 } from "@/store/slices/canvasSlice";
+import {
+  setAgentCount as setAgentCountAction,
+  initializeAgents,
+  setActiveAgent,
+  resetOrchestration,
+} from "@/store/slices/agentSlice";
+import { AGENT_PERSONAS } from "@/constants/agent-personas";
+import { AgentChatInstance } from "./AgentChatInstance";
 import { Brain, ChevronDown, X, Zap } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { ImageIcon } from "@/lib/svg-icons";
@@ -437,12 +445,18 @@ export function ChatPanel({
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
   const [inputValue, setInputValue] = useState("");
-  const [agentCount, setAgentCount] = useState(1);
+  const agentCount = useAppSelector((s) => s.agent.agentCount);
+  const orchestrationId = useAppSelector((s) => s.agent.orchestrationId);
+  const agents = useAppSelector((s) => s.agent.agents);
+  const activeAgentId = useAppSelector((s) => s.agent.activeAgentId);
+  const isMultiAgent = orchestrationId !== null && agents.length > 0;
+  const [multiAgentPlanContext, setMultiAgentPlanContext] = useState("");
   const [showAgentDropdown, setShowAgentDropdown] = useState(false);
   const [showHeaderDropdown, setShowHeaderDropdown] = useState(false);
   const agentDropdownRef = useRef<HTMLDivElement>(null);
   const headerDropdownRef = useRef<HTMLDivElement>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [isOrchestrating, setIsOrchestrating] = useState(false);
   const [toolSteps, _setToolSteps] = useState<ToolStep[]>([]);
   const chatThreadRef = useRef<HTMLDivElement>(null);
   const selectedFrameIds = useAppSelector((s) => s.canvas.selectedFrameIds);
@@ -648,16 +662,11 @@ export function ChatPanel({
 
       if (ev.type === "data-tool-call-delta") {
         if (data.toolName === "create_screen" && data.frame) {
-          const changes: {
-            label?: string;
-            html?: string;
-            left?: number;
-            top?: number;
-          } = {};
+          // Only update html/label during deltas — never overwrite left/top
+          // so the user can freely drag the frame while it streams.
+          const changes: { label?: string; html?: string } = {};
           if (data.frame.label !== undefined) changes.label = data.frame.label;
           if (data.frame.html !== undefined) changes.html = data.frame.html;
-          if (data.frame.left !== undefined) changes.left = data.frame.left;
-          if (data.frame.top !== undefined) changes.top = data.frame.top;
           if (Object.keys(changes).length > 0) {
             dispatch(updateFrame({ id: data.frame.id, changes }));
           }
@@ -876,16 +885,73 @@ export function ChatPanel({
     };
   }, [isResizing, handleMouseMove, handleMouseUp]);
 
+  const handleOrchestrate = useCallback(
+    async (prompt: string) => {
+      setIsOrchestrating(true);
+      try {
+        const res = await fetch("/api/chat/orchestrate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt,
+            agentCount,
+            frames: latestCanvasState.frames,
+            theme: latestCanvasState.theme,
+          }),
+        });
+        if (!res.ok) throw new Error("Orchestration failed");
+        const data = await res.json();
+        setMultiAgentPlanContext(data.sharedContext?.planContext ?? "");
+        // Apply the theme built during orchestration planning
+        if (
+          data.sharedContext?.theme &&
+          Object.keys(data.sharedContext.theme).length > 0
+        ) {
+          dispatch(replaceTheme(data.sharedContext.theme));
+        }
+        dispatch(
+          initializeAgents({
+            orchestrationId: data.orchestrationId,
+            assignments: data.agents,
+          }),
+        );
+      } catch (err) {
+        console.error("Orchestration error:", err);
+        // Fallback to single agent
+        sendMessage({ text: prompt });
+      } finally {
+        setIsOrchestrating(false);
+      }
+    },
+    [agentCount, dispatch, sendMessage],
+  );
+
   const handleSend = useCallback(
     (e?: React.FormEvent) => {
       e?.preventDefault();
       if (!inputValue.trim()) return;
+      const prompt = inputValue.trim();
+      setInputValue("");
+
+      if (agentCount > 1 && !isMultiAgent) {
+        // Trigger multi-agent orchestration
+        handleOrchestrate(prompt);
+        return;
+      }
+
+      // Single agent or already in multi-agent mode
       setToolSteps([]);
       setLastMessageToolSteps([]);
-      sendMessage({ text: inputValue.trim() });
-      setInputValue("");
+      sendMessage({ text: prompt });
     },
-    [inputValue, sendMessage, setToolSteps],
+    [
+      inputValue,
+      sendMessage,
+      setToolSteps,
+      agentCount,
+      isMultiAgent,
+      handleOrchestrate,
+    ],
   );
 
   useEffect(() => {
@@ -971,8 +1037,34 @@ export function ChatPanel({
               onClick={() => setShowHeaderDropdown((v) => !v)}
               className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-foreground transition-colors hover:bg-white/10"
             >
-              <Zap className="size-3.5 text-[#8A87F8]" fill="#8A87F8" />
-              Agent 1<span className="text-white/40">·</span>
+              {isMultiAgent ? (
+                <>
+                  {(() => {
+                    const active = agents.find((a) => a.id === activeAgentId);
+                    const persona = active
+                      ? {
+                          emoji: active.emoji,
+                          color: active.color,
+                          name: active.name,
+                        }
+                      : AGENT_PERSONAS[0];
+                    return (
+                      <>
+                        <span className="text-sm">{persona.emoji}</span>
+                        <span style={{ color: persona.color }}>
+                          {persona.name}
+                        </span>
+                      </>
+                    );
+                  })()}
+                </>
+              ) : (
+                <>
+                  <Zap className="size-3.5 text-[#8A87F8]" fill="#8A87F8" />
+                  {AGENT_PERSONAS[0].emoji} {AGENT_PERSONAS[0].name}
+                </>
+              )}
+              <span className="text-white/40">·</span>
               <span className="text-white/50 text-xs font-normal">
                 {activeFrameLabel.length > 12
                   ? `${activeFrameLabel.slice(0, 12)}…`
@@ -985,40 +1077,83 @@ export function ChatPanel({
                 <div className="sticky top-0 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/40">
                   Active Agents
                 </div>
-                {Array.from({ length: agentCount }, (_, i) => {
-                  const assignedFrame = frames[i];
-                  return (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setShowHeaderDropdown(false)}
-                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-white/85 transition-colors hover:bg-white/[0.06] hover:text-white"
-                    >
-                      <span
-                        className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
-                        style={{
-                          backgroundColor: [
-                            "#8A87F8",
-                            "#F87171",
-                            "#34D399",
-                            "#FBBF24",
-                            "#60A5FA",
-                          ][i],
+                {isMultiAgent
+                  ? agents.map((ag) => (
+                      <button
+                        key={ag.id}
+                        type="button"
+                        onClick={() => {
+                          dispatch(setActiveAgent(ag.id));
+                          setShowHeaderDropdown(false);
                         }}
+                        className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors hover:bg-white/[0.06] hover:text-white ${
+                          ag.id === activeAgentId
+                            ? "bg-white/[0.04] text-white"
+                            : "text-white/85"
+                        }`}
                       >
-                        {i + 1}
-                      </span>
-                      <div className="flex flex-col">
-                        <span className="font-medium text-white/90">
-                          Agent {i + 1}
+                        <span
+                          className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-xs"
+                          style={{ backgroundColor: ag.color }}
+                        >
+                          {ag.emoji}
                         </span>
-                        <span className="text-[10px] text-white/40">
-                          {assignedFrame ? assignedFrame.label : "Unassigned"}
+                        <div className="flex flex-col">
+                          <span className="font-medium text-white/90">
+                            {ag.name}
+                          </span>
+                          <span className="text-[10px] text-white/40">
+                            {ag.assignedScreens.join(", ") || "No screens"}
+                          </span>
+                        </div>
+                        <span
+                          className={`ml-auto text-[9px] font-mono uppercase ${
+                            ag.status === "working"
+                              ? "text-amber-400"
+                              : ag.status === "done"
+                                ? "text-emerald-400"
+                                : ag.status === "error"
+                                  ? "text-red-400"
+                                  : "text-white/30"
+                          }`}
+                        >
+                          {ag.status === "working"
+                            ? "●"
+                            : ag.status === "done"
+                              ? "✓"
+                              : ""}
                         </span>
-                      </div>
-                    </button>
-                  );
-                })}
+                      </button>
+                    ))
+                  : Array.from({ length: agentCount }, (_, i) => {
+                      const persona = AGENT_PERSONAS[i];
+                      const assignedFrame = frames[i];
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setShowHeaderDropdown(false)}
+                          className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-white/85 transition-colors hover:bg-white/[0.06] hover:text-white"
+                        >
+                          <span
+                            className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-xs"
+                            style={{ backgroundColor: persona.color }}
+                          >
+                            {persona.emoji}
+                          </span>
+                          <div className="flex flex-col">
+                            <span className="font-medium text-white/90">
+                              {persona.name}
+                            </span>
+                            <span className="text-[10px] text-white/40">
+                              {assignedFrame
+                                ? assignedFrame.label
+                                : "Unassigned"}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
               </div>
             )}
           </div>
@@ -1038,9 +1173,36 @@ export function ChatPanel({
         id="chat-thread-area"
         className="min-h-0 flex-1 space-y-4 overflow-y-auto scrollbar-hide p-2"
       >
-        {isLoadingHistory && <ChatHistoryShimmer />}
+        {/* ─── Multi-agent mode ─────────────────────────────────────── */}
+        {isMultiAgent && (
+          <div className="flex h-full flex-col">
+            {agents.map((ag) => (
+              <AgentChatInstance
+                key={ag.chatId}
+                agent={ag}
+                isActive={ag.id === activeAgentId}
+                planContext={multiAgentPlanContext}
+              />
+            ))}
+          </div>
+        )}
 
-        {!isLoadingHistory &&
+        {/* ─── Orchestrating indicator ──────────────────────────────── */}
+        {isOrchestrating && !isMultiAgent && (
+          <div className="flex w-full justify-start">
+            <div className="w-fit max-w-[85%] rounded-lg bg-muted/50 px-3 py-2.5 text-sm">
+              <span className="inline-block animate-pulse bg-gradient-to-r from-stone-400 via-stone-200 to-stone-400 bg-[length:200%_100%] bg-clip-text text-transparent [animation-duration:1.5s] font-medium">
+                Orchestrating {agentCount} agents…
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Single-agent mode (original) ─────────────────────────── */}
+        {!isMultiAgent && isLoadingHistory && <ChatHistoryShimmer />}
+
+        {!isMultiAgent &&
+          !isLoadingHistory &&
           messages.map(
             (
               msg: {
@@ -1166,7 +1328,7 @@ export function ChatPanel({
          * before any text streams in). Without this bubble the chips are
          * calculated but have nowhere to render, so nothing shows until refresh.
          */}
-        {showPendingBubble && (
+        {!isMultiAgent && showPendingBubble && (
           <div className="flex w-full justify-start">
             <div className="w-full rounded-lg bg-muted/50 px-3 py-2.5 text-sm text-stone-300">
               <AssistantMessageContent
@@ -1180,7 +1342,9 @@ export function ChatPanel({
         )}
 
         {/* "Working…" spinner — only when no steps and no content yet */}
-        {showStreamingIndicator && <StreamingActivityIndicator />}
+        {!isMultiAgent && showStreamingIndicator && (
+          <StreamingActivityIndicator />
+        )}
       </div>
 
       <div className="w-full p-4">
@@ -1251,22 +1415,12 @@ export function ChatPanel({
                   onClick={() => setShowAgentDropdown((v) => !v)}
                   className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium transition-colors hover:bg-secondary/40"
                   style={{
-                    color: [
-                      "#8A87F8",
-                      "#F87171",
-                      "#34D399",
-                      "#FBBF24",
-                      "#60A5FA",
-                    ][agentCount - 1],
+                    color: AGENT_PERSONAS[agentCount - 1]?.color ?? "#8A87F8",
                   }}
                 >
                   <Zap
                     className="size-3.5"
-                    fill={
-                      ["#8A87F8", "#F87171", "#34D399", "#FBBF24", "#60A5FA"][
-                        agentCount - 1
-                      ]
-                    }
+                    fill={AGENT_PERSONAS[agentCount - 1]?.color ?? "#8A87F8"}
                   />
                   {agentCount}
                   <ChevronDown className="size-3 opacity-60" />
@@ -1276,31 +1430,32 @@ export function ChatPanel({
                     <div className="sticky top-0 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/40">
                       Agents
                     </div>
-                    {[1, 2, 3, 4, 5].map((n) => {
-                      const color = [
-                        "#8A87F8",
-                        "#F87171",
-                        "#34D399",
-                        "#FBBF24",
-                        "#60A5FA",
-                      ][n - 1];
+                    {[1, 2, 3, 4, 5, 6].map((n) => {
+                      const persona = AGENT_PERSONAS[n - 1];
                       return (
                         <button
                           key={n}
                           type="button"
                           onClick={() => {
-                            setAgentCount(n);
+                            dispatch(setAgentCountAction(n));
+                            if (n === 1 && isMultiAgent) {
+                              dispatch(resetOrchestration());
+                            }
                             setShowAgentDropdown(false);
                           }}
                           className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-white/[0.06] ${
                             agentCount === n ? "font-semibold" : "text-white/85"
                           }`}
-                          style={agentCount === n ? { color } : undefined}
+                          style={
+                            agentCount === n
+                              ? { color: persona.color }
+                              : undefined
+                          }
                         >
                           <Zap
                             className="size-3"
-                            style={{ color }}
-                            fill={color}
+                            style={{ color: persona.color }}
+                            fill={persona.color}
                           />
                           {n} {n === 1 ? "agent" : "agents"}
                         </button>

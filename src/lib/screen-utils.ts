@@ -139,3 +139,15 @@ export function injectFrameScripts(html: string): string {
   }
   return html + inject;
 }
+
+export function injectStreamingFadeIn(html: string): string {
+  const style =
+    '<style id="streaming-fade">body{transition:opacity .12s ease-out;opacity:.96}</style>';
+  const script =
+    "<script>(function(){requestAnimationFrame(function(){var b=document.body;if(b)b.style.opacity='1';});})();</script>";
+  const inject = style + script;
+  if (html.includes("</body>")) {
+    return html.replace("</body>", inject + "</body>");
+  }
+  return html + inject;
+}

@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
       where: { id: projectId },
       include: {
         frames: true,
-        chatSession: true,
+        chatSessions: true,
       },
     });
 
@@ -30,7 +30,11 @@ export async function GET(req: NextRequest) {
       html: f.html,
     }));
 
-    const messages = (project.chatSession?.messages as unknown[]) ?? [];
+    // Load the default (single-agent) session messages
+    const defaultSession = project.chatSessions.find(
+      (s) => s.agentId === "default",
+    );
+    const messages = (defaultSession?.messages as unknown[]) ?? [];
 
     return NextResponse.json({ frames, messages });
   } catch (e) {

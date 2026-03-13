@@ -229,6 +229,45 @@ const OUTPUT_CONSTRAINTS = `\
 </output_constraints>`;
 
 // ---------------------------------------------------------------------------
+// Agent scope (multi-agent orchestration)
+// ---------------------------------------------------------------------------
+
+export function buildAgentScope(agent: {
+  name: string;
+  subTask: string;
+  assignedScreens: string[];
+  isFirstAgent: boolean;
+}): string {
+  const screenList = agent.assignedScreens.join(", ");
+  const themeRestriction = agent.isFirstAgent
+    ? ""
+    : "\n    Do NOT call build_theme or update_theme — another agent handles the theme.";
+
+  return `\
+<agent_scope>
+    You are ${agent.name}. Your task: ${agent.subTask}
+    You are responsible ONLY for screens: ${screenList}.
+    Do NOT modify screens outside your assignment.${themeRestriction}
+</agent_scope>`;
+}
+
+// ---------------------------------------------------------------------------
+// Task decomposition prompt (used by orchestration endpoint)
+// ---------------------------------------------------------------------------
+
+export const TASK_DECOMPOSITION_PROMPT = `\
+You are a task decomposition engine for a mobile app design tool.
+Given a user prompt and a number of agents, split the work into non-overlapping sub-tasks.
+
+Rules:
+- Each agent gets a clear, self-contained sub-task with specific screens to create.
+- Divide screens as equally as possible among agents.
+- Agent 1 (index 0) is ALWAYS responsible for theme creation. No other agent should touch the theme.
+- Screen names must not overlap between agents.
+- Each sub-task should contain enough context for the agent to work independently.
+- Include the visual style description in each sub-task so agents maintain consistency.`;
+
+// ---------------------------------------------------------------------------
 // Composer
 // ---------------------------------------------------------------------------
 
@@ -244,6 +283,7 @@ export function getSystemPrompt(
     string | number | boolean | null | undefined
   > | null = null,
   planContext = "",
+  agentScope = "",
 ): string {
   const planSection = planContext
     ? `\n<planning_context>\n${planContext}\n</planning_context>\n`
@@ -256,6 +296,7 @@ export function getSystemPrompt(
   return [
     ROLE,
     buildBackground(frames),
+    agentScope,
     planSection,
     instructions,
     TOOL_GUIDANCE,

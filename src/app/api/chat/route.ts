@@ -8,7 +8,11 @@ import {
   type ModelMessage,
 } from "ai";
 
-import { getSystemPrompt, isInitialPrompt } from "@/constants/agent-prompts";
+import {
+  getSystemPrompt,
+  isInitialPrompt,
+  buildAgentScope,
+} from "@/constants/agent-prompts";
 import type { ThemeVariables } from "@/lib/screen-utils";
 import { createTools, type FrameState } from "@/lib/agent/tools";
 import { runPlanningPipeline } from "@/lib/agent/planner";
@@ -71,6 +75,14 @@ export async function POST(req: Request) {
     const initialFrames = Array.isArray(body?.frames) ? body.frames : [];
     const initialTheme = (body?.theme ?? {}) as ThemeVariables;
 
+    // Multi-agent metadata (optional)
+    const agentId = body?.agentId as string | undefined;
+    const agentName = body?.agentName as string | undefined;
+    const subTask = body?.subTask as string | undefined;
+    const assignedScreens = (body?.assignedScreens ?? []) as string[];
+    const isFirstAgent = body?.isFirstAgent as boolean | undefined;
+    const agentPlanContext = body?.planContext as string | undefined;
+
     const lastMsg = rawMessages[rawMessages.length - 1];
     const userPrompt =
       typeof lastMsg?.content === "string"
@@ -96,8 +108,11 @@ export async function POST(req: Request) {
         writer.write({ type: "start-step" });
 
         // 1. Planning pipeline (if initial request) — emits data events into the already-started message
+        //    Skip if agent already has planContext (multi-agent mode — planning ran in orchestration)
         let planContext = "";
-        if (isInitialPrompt(frames) && userPrompt.trim()) {
+        if (agentPlanContext) {
+          planContext = agentPlanContext;
+        } else if (isInitialPrompt(frames) && userPrompt.trim()) {
           const planning = await runPlanningPipeline(
             userPrompt,
             vertex,
@@ -115,8 +130,17 @@ export async function POST(req: Request) {
           designModel: { vertex, modelId: DESIGN_MODEL_ID },
         });
 
-        // 3. Build system prompt
-        const system = getSystemPrompt(frames, theme, planContext);
+        // 3. Build system prompt (with optional agent scope for multi-agent)
+        let agentScope = "";
+        if (agentId && agentName && subTask) {
+          agentScope = buildAgentScope({
+            name: agentName,
+            subTask,
+            assignedScreens,
+            isFirstAgent: isFirstAgent ?? false,
+          });
+        }
+        const system = getSystemPrompt(frames, theme, planContext, agentScope);
 
         // 4. Prepare messages
         const modelMessages =

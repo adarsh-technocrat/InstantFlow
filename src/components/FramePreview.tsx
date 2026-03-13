@@ -8,7 +8,7 @@ import React, {
   useState,
 } from "react";
 import { useIframeBridge } from "@/hooks/useIframeBridge";
-import { injectFrameScripts } from "@/lib/screen-utils";
+import { injectFrameScripts, injectStreamingFadeIn } from "@/lib/screen-utils";
 
 const LOADING_THRESHOLD = 50;
 const POST_DEBOUNCE_MS = 2000;
@@ -52,19 +52,6 @@ export const FramePreview = React.forwardRef<
     onMessage: onMessageFromFrame,
   });
 
-  const writeWithTransition = useCallback(() => {
-    const el = internalRef.current;
-    const html = latestHtmlRef.current;
-    if (!html) return;
-    el?.classList.add("frame-updating");
-    requestAnimationFrame(() => {
-      writeContent(html);
-      requestAnimationFrame(() => {
-        el?.classList.remove("frame-updating");
-      });
-    });
-  }, [writeContent]);
-
   const preparedHtml = useMemo(
     () => (html ? injectFrameScripts(html) : ""),
     [html],
@@ -92,19 +79,26 @@ export const FramePreview = React.forwardRef<
     if (!preparedHtml) return;
     latestHtmlRef.current = preparedHtml;
 
+    const doWrite = () => {
+      const htmlToWrite = isStreaming
+        ? injectStreamingFadeIn(latestHtmlRef.current)
+        : latestHtmlRef.current;
+      writeContent(htmlToWrite);
+    };
+
     if (!isStreaming) {
       if (writeTimeoutRef.current) {
         clearTimeout(writeTimeoutRef.current);
         writeTimeoutRef.current = null;
       }
-      writeWithTransition();
+      doWrite();
       return;
     }
 
     if (writeTimeoutRef.current) return;
     writeTimeoutRef.current = setTimeout(() => {
       writeTimeoutRef.current = null;
-      writeWithTransition();
+      doWrite();
     }, WRITE_THROTTLE_MS);
 
     return () => {
@@ -113,7 +107,7 @@ export const FramePreview = React.forwardRef<
         writeTimeoutRef.current = null;
       }
     };
-  }, [preparedHtml, isStreaming, writeWithTransition]);
+  }, [preparedHtml, isStreaming, writeContent]);
 
   const setRef = useCallback(
     (el: HTMLIFrameElement | null) => {
@@ -128,8 +122,12 @@ export const FramePreview = React.forwardRef<
   );
 
   const handleIframeLoad = useCallback(() => {
-    if (latestHtmlRef.current) writeWithTransition();
-  }, [writeWithTransition]);
+    if (!latestHtmlRef.current) return;
+    const htmlToWrite = isStreaming
+      ? injectStreamingFadeIn(latestHtmlRef.current)
+      : latestHtmlRef.current;
+    writeContent(htmlToWrite);
+  }, [writeContent, isStreaming]);
 
   if (!html || html.length === 0) {
     return (
@@ -146,7 +144,7 @@ export const FramePreview = React.forwardRef<
   }
 
   const iframeClassName = [
-    "frame-preview-iframe size-full border-0 bg-white scrollbar-hide",
+    "size-full border-0 bg-white scrollbar-hide",
     !isStreaming && "frame-fade-in",
     allowInteraction ? "pointer-events-auto" : "pointer-events-none",
   ]

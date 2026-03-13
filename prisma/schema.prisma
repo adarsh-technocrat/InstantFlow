@@ -8,18 +8,21 @@ datasource db {
 }
 
 model Project {
-  id          String       @id @default("default")
-  chatSession ChatSession?
-  frames      Frame[]
-  updatedAt   DateTime     @updatedAt
+  id           String        @id @default("default")
+  chatSessions ChatSession[]
+  frames       Frame[]
+  updatedAt    DateTime      @updatedAt
 }
 
 model ChatSession {
   id        String   @id @default(cuid())
-  projectId String   @unique
+  projectId String
+  agentId   String   @default("default")
   project   Project  @relation(fields: [projectId], references: [id])
   messages  Json     @default("[]")
   updatedAt DateTime @updatedAt
+
+  @@unique([projectId, agentId])
 }
 
 model Frame {

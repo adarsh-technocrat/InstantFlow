@@ -112,13 +112,6 @@ body {
   animation: frame-fade-in 0.3s ease-out;
 }
 
-.frame-preview-iframe {
-  transition: opacity 0.15s ease-out;
-}
-.frame-preview-iframe.frame-updating {
-  opacity: 0.96;
-}
-
 .frame-preview-gradient {
   background: linear-gradient(
     135deg,
