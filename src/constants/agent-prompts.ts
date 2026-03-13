@@ -2,7 +2,9 @@
 // Helpers
 // ---------------------------------------------------------------------------
 
-export function isInitialPrompt(frames: unknown[]): boolean {
+export function isInitialPrompt(
+  frames: Array<Record<string, string | number | boolean | null | undefined>>,
+): boolean {
   return !Array.isArray(frames) || frames.length === 0;
 }
 
@@ -30,7 +32,9 @@ You communicate in short, direct messages and never announce what you're about t
 
 // 2. Background ───────────────────────────────────────────────────────────────
 
-function buildBackground(frames: unknown[]): string {
+function buildBackground(
+  frames: Array<Record<string, string | number | boolean | null | undefined>>,
+): string {
   if (!Array.isArray(frames) || frames.length === 0) {
     return `\
 <background>
@@ -115,6 +119,12 @@ const STANDARD_INSTRUCTIONS = `\
     If an element carries data-selected="true", scope all changes to that element only —
     even if the user's phrasing sounds broad ("make it darker", "change the style").
   </selected_element_scope>
+
+  <reply_after_tools>
+    After using tools (e.g. update_screen, edit_screen), always add a short text message
+    in the same turn — one sentence is enough (e.g. "Done. Refactored the home screen into a minimalist dashboard.").
+    This gives the user a clear confirmation; do not end the response with only tool calls.
+  </reply_after_tools>
 </instructions>`;
 
 // 4. Tool guidance ────────────────────────────────────────────────────────────
@@ -149,8 +159,8 @@ const TOOL_GUIDANCE = `\
     Example: {"--primary": "#1d4ed8"}
   </tool>
 
-  <tool name="create_screen(name, screen_html)">
-    Creates a new screen. screen_html must be inner-body HTML only — no html/head/body tags.
+  <tool name="create_screen(name, description)">
+    Creates a new screen. Pass the screen name and description (e.g. from the plan). The design model generates the HTML.
   </tool>
 
   <tool name="edit_screen(id, find, replace)">
@@ -159,10 +169,8 @@ const TOOL_GUIDANCE = `\
     Only one edit_screen call per screen per response.
   </tool>
 
-  <tool name="update_screen(id, screen_html)">
-    Replaces the entire screen body. Reserve for broad layout redesigns where
-    edit_screen cannot reach all the changes needed.
-    Provide inner-body HTML only — no html/head/body tags.
+  <tool name="update_screen(id, description)">
+    Replaces the entire screen body based on a description of the changes. Reserve for broad layout redesigns where edit_screen cannot reach all the changes needed. The design model generates the new HTML from the current screen and your description.
   </tool>
 
   <decision_examples>
@@ -220,8 +228,13 @@ const OUTPUT_CONSTRAINTS = `\
 // ---------------------------------------------------------------------------
 
 export function getSystemPrompt(
-  frames: unknown[] = [],
-  _theme: unknown = null,
+  frames: Array<
+    Record<string, string | number | boolean | null | undefined>
+  > = [],
+  _theme: Record<
+    string,
+    string | number | boolean | null | undefined
+  > | null = null,
   planContext = "",
 ): string {
   const planSection = planContext

@@ -12,9 +12,9 @@ import {
   setTheme,
   replaceTheme,
 } from "@/store/slices/canvasSlice";
-import { Brain, ChevronDown } from "lucide-react";
+import { Brain, ChevronDown, X, Zap } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { CloseIcon, ImageIcon } from "@/lib/svg-icons";
+import { ImageIcon } from "@/lib/svg-icons";
 import { PageMentionInput } from "./PageMentionInput";
 
 interface ToolStep {
@@ -437,6 +437,11 @@ export function ChatPanel({
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  const [agentCount, setAgentCount] = useState(1);
+  const [showAgentDropdown, setShowAgentDropdown] = useState(false);
+  const [showHeaderDropdown, setShowHeaderDropdown] = useState(false);
+  const agentDropdownRef = useRef<HTMLDivElement>(null);
+  const headerDropdownRef = useRef<HTMLDivElement>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [toolSteps, _setToolSteps] = useState<ToolStep[]>([]);
   const chatThreadRef = useRef<HTMLDivElement>(null);
@@ -499,7 +504,7 @@ export function ChatPanel({
         toolCallId?: string;
         toolName?: string;
         input?: Record<string, JsonValue>;
-        output?: unknown;
+        output?: JsonValue;
         data?: {
           toolCallId: string;
           toolName: string;
@@ -881,6 +886,23 @@ export function ChatPanel({
     });
   }, [messages, toolSteps]);
 
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        agentDropdownRef.current &&
+        !agentDropdownRef.current.contains(e.target as Node)
+      )
+        setShowAgentDropdown(false);
+      if (
+        headerDropdownRef.current &&
+        !headerDropdownRef.current.contains(e.target as Node)
+      )
+        setShowHeaderDropdown(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   if (!isVisible) return null;
 
   const isActivelyStreaming = status === "submitted" || status === "streaming";
@@ -933,19 +955,72 @@ export function ChatPanel({
       </div>
 
       <div className="flex flex-row items-center justify-between p-2 pl-3">
-        <h2 className="text-sm font-medium leading-[150%] text-foreground">
-          Edit{" "}
-          {activeFrameLabel.length > 15
-            ? `${activeFrameLabel.slice(0, 15)}…`
-            : activeFrameLabel}
-        </h2>
+        <div className="flex items-center gap-2">
+          <div ref={headerDropdownRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setShowHeaderDropdown((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-foreground transition-colors hover:bg-white/10"
+            >
+              <Zap className="size-3.5 text-[#8A87F8]" fill="#8A87F8" />
+              Agent 1<span className="text-white/40">·</span>
+              <span className="text-white/50 text-xs font-normal">
+                {activeFrameLabel.length > 12
+                  ? `${activeFrameLabel.slice(0, 12)}…`
+                  : activeFrameLabel}
+              </span>
+              <ChevronDown className="size-3.5 text-white/50" />
+            </button>
+            {showHeaderDropdown && (
+              <div className="absolute left-0 top-full z-50 mt-1 min-w-[200px] overflow-hidden rounded-xl border border-white/10 bg-[#161414]/95 py-1 shadow-2xl">
+                <div className="sticky top-0 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                  Active Agents
+                </div>
+                {Array.from({ length: agentCount }, (_, i) => {
+                  const assignedFrame = frames[i];
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setShowHeaderDropdown(false)}
+                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-white/85 transition-colors hover:bg-white/[0.06] hover:text-white"
+                    >
+                      <span
+                        className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                        style={{
+                          backgroundColor: [
+                            "#8A87F8",
+                            "#F87171",
+                            "#34D399",
+                            "#FBBF24",
+                            "#60A5FA",
+                          ][i],
+                        }}
+                      >
+                        {i + 1}
+                      </span>
+                      <div className="flex flex-col">
+                        <span className="font-medium text-white/90">
+                          Agent {i + 1}
+                        </span>
+                        <span className="text-[10px] text-white/40">
+                          {assignedFrame ? assignedFrame.label : "Unassigned"}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close panel"
           className="inline-flex w-8 h-8 min-h-8 shrink-0 cursor-pointer items-center justify-center rounded-md bg-secondary/40 text-secondary-foreground/30 px-2 py-1.5 shadow-xs transition-colors hover:bg-secondary/60"
         >
-          <CloseIcon className="h-3 w-3" />
+          <X className="h-3 w-3" />
         </button>
       </div>
 
@@ -1153,13 +1228,79 @@ export function ChatPanel({
             className="text-sm"
           />
           <div className="flex items-center justify-between p-2">
-            <button
-              type="button"
-              aria-label="Attach image"
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:text-muted-foreground hover:bg-secondary/40"
-            >
-              <ImageIcon className="size-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                aria-label="Attach image"
+                className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:text-muted-foreground hover:bg-secondary/40"
+              >
+                <ImageIcon className="size-4" />
+              </button>
+              <div ref={agentDropdownRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowAgentDropdown((v) => !v)}
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium transition-colors hover:bg-secondary/40"
+                  style={{
+                    color: [
+                      "#8A87F8",
+                      "#F87171",
+                      "#34D399",
+                      "#FBBF24",
+                      "#60A5FA",
+                    ][agentCount - 1],
+                  }}
+                >
+                  <Zap
+                    className="size-3.5"
+                    fill={
+                      ["#8A87F8", "#F87171", "#34D399", "#FBBF24", "#60A5FA"][
+                        agentCount - 1
+                      ]
+                    }
+                  />
+                  {agentCount}
+                  <ChevronDown className="size-3 opacity-60" />
+                </button>
+                {showAgentDropdown && (
+                  <div className="absolute bottom-full left-0 z-50 mb-1 min-w-[130px] overflow-hidden rounded-xl border border-white/10 bg-[#161414]/95 py-1 shadow-2xl">
+                    <div className="sticky top-0 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                      Agents
+                    </div>
+                    {[1, 2, 3, 4, 5].map((n) => {
+                      const color = [
+                        "#8A87F8",
+                        "#F87171",
+                        "#34D399",
+                        "#FBBF24",
+                        "#60A5FA",
+                      ][n - 1];
+                      return (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => {
+                            setAgentCount(n);
+                            setShowAgentDropdown(false);
+                          }}
+                          className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-white/[0.06] ${
+                            agentCount === n ? "font-semibold" : "text-white/85"
+                          }`}
+                          style={agentCount === n ? { color } : undefined}
+                        >
+                          <Zap
+                            className="size-3"
+                            style={{ color }}
+                            fill={color}
+                          />
+                          {n} {n === 1 ? "agent" : "agents"}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
             <button
               type="submit"
               disabled={!inputValue.trim() || isActivelyStreaming}

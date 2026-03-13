@@ -1,0 +1,5 @@
+{"location":"planner.ts:build_theme","message":"theme built","data":{"rawKeys":0,"normalizedKeys":0,"sampleKeys":[]},"timestamp":1773393774421,"hypothesisId":"H3"}
+{"location":"route.ts:transform","message":"tool-input-start","data":{"toolCallId":"SwzATGpLWQfmjicE","skip":false,"setSize":0},"timestamp":1773393789917,"hypothesisId":"H1"}
+{"location":"route.ts:transform","message":"tool-output-available","data":{"toolCallId":"SwzATGpLWQfmjicE","skip":false,"setSize":0},"timestamp":1773393850589,"hypothesisId":"H2"}
+{"location":"route.ts:transform","message":"tool-input-start","data":{"toolCallId":"LisqQNYoetD6DbDM","skip":false,"setSize":1},"timestamp":1773393861375,"hypothesisId":"H1"}
+{"location":"route.ts:transform","message":"tool-output-available","data":{"toolCallId":"LisqQNYoetD6DbDM","skip":false,"setSize":1},"timestamp":1773393908302,"hypothesisId":"H2"}

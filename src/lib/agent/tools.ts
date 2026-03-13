@@ -60,6 +60,7 @@ async function generateScreenHtmlWithDesignModel(
       model: vertex(modelId),
       prompt,
       maxOutputTokens: options?.maxOutputTokens ?? 16384,
+      providerOptions: DESIGN_MODEL_PROVIDER_OPTIONS,
     });
     const out = stripHtmlMarkdown(text);
     return out || null;
@@ -80,6 +81,7 @@ async function streamScreenHtmlWithDesignModel(
       model: vertex(modelId),
       prompt,
       maxOutputTokens: options?.maxOutputTokens ?? 16384,
+      providerOptions: DESIGN_MODEL_PROVIDER_OPTIONS,
     });
     let accumulated = "";
     for await (const part of result.textStream) {
@@ -108,6 +110,7 @@ async function generateThemeWithDesignModel(
       model: vertex(modelId),
       schema: z.record(z.string(), z.string()),
       prompt: `${prompt}\n\nOutput a JSON object with CSS variable keys (e.g. ${THEME_KEYS}). Keys must start with --.`,
+      providerOptions: DESIGN_MODEL_PROVIDER_OPTIONS,
     });
     return object && typeof object === "object" ? object : null;
   } catch {
@@ -117,6 +120,15 @@ async function generateThemeWithDesignModel(
 
 const FRAME_SPACING = 420;
 const STREAM_THROTTLE_MS = 120;
+
+const DESIGN_MODEL_PROVIDER_OPTIONS = {
+  google: {
+    thinkingConfig: {
+      includeThoughts: false,
+      thinkingBudget: 0,
+    },
+  },
+} as const;
 
 export function createTools(ctx: ToolContext) {
   const { frames, theme, writer, designModel } = ctx;

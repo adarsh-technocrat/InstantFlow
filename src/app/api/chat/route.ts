@@ -15,6 +15,10 @@ import { runPlanningPipeline } from "@/lib/agent/planner";
 
 export const runtime = "nodejs";
 
+const CHAT_MODEL_ID = process.env.CHAT_MODEL_ID ?? "gemini-2.5-pro";
+// Design model used only for create_screen, edit_screen, and theme flows (better at UI design).
+const DESIGN_MODEL_ID = process.env.DESIGN_MODEL_ID ?? "gemini-3-pro-preview";
+
 const vertex = createVertex({
   ...(process.env.GOOGLE_CLIENT_EMAIL &&
     process.env.GOOGLE_PRIVATE_KEY && {
@@ -27,6 +31,21 @@ const vertex = createVertex({
       },
     }),
 });
+
+function getProviderOptions(modelId: string) {
+  const id = modelId.toLowerCase();
+  if (id.includes("gemini")) {
+    return {
+      google: {
+        thinkingConfig: {
+          includeThoughts: true,
+          thinkingBudget: 8192,
+        },
+      },
+    };
+  }
+  return {};
+}
 
 function hasParts(
   msg: object | null | undefined,
@@ -79,16 +98,22 @@ export async function POST(req: Request) {
         // 1. Planning pipeline (if initial request) — emits data events into the already-started message
         let planContext = "";
         if (isInitialPrompt(frames) && userPrompt.trim()) {
-          planContext = await runPlanningPipeline(
+          const planning = await runPlanningPipeline(
             userPrompt,
             vertex,
             writer,
             theme,
           );
+          planContext = planning.planContext;
         }
 
-        // 2. Create tools with mutable context and writer for streaming step events
-        const tools = createTools({ frames, theme, writer });
+        // 2. Create tools: agent uses CHAT_MODEL; design model (3-pro-preview) used only inside create_screen, edit_screen, build_theme, update_theme
+        const tools = createTools({
+          frames,
+          theme,
+          writer,
+          designModel: { vertex, modelId: DESIGN_MODEL_ID },
+        });
 
         // 3. Build system prompt
         const system = getSystemPrompt(frames, theme, planContext);
@@ -136,34 +161,31 @@ export async function POST(req: Request) {
         // 5. Strip base64 images from history to avoid Gemini payload limits
         const sanitizedMessages = stripBase64FromMessages(messagesToSend);
 
-        // 6. Run agentic streamText — forward SDK stream as-is (tool-input-*, tool-call, tool-result, etc.)
+        // 6. Run agentic streamText — main agent always uses CHAT_MODEL; design tools use DESIGN_MODEL internally
         const result = streamText({
-          model: vertex("gemini-3-pro-preview"),
+          model: vertex(CHAT_MODEL_ID),
           system,
           messages: sanitizedMessages,
           tools,
           stopWhen: stepCountIs(10),
-          maxRetries: 1,
-          providerOptions: {
-            google: {
-              thinkingConfig: {
-                // thinkingLevel: "low",
-                includeThoughts: true,
-                // Limits total thinking tokens for the whole request; step 0 uses most, later steps get little/none.
-                thinkingBudget: 2048,
-              },
-            },
-          },
+          maxRetries: 2,
+          providerOptions: getProviderOptions(CHAT_MODEL_ID) as Parameters<
+            typeof streamText
+          >[0]["providerOptions"],
         });
         // 7. Forward streamText UI stream, skipping 'start' (already emitted above)
         const uiStream = result.toUIMessageStream();
         let skippedFirstStart = false;
         let skippedFirstStep = false;
         let stepCount = 0;
+        // Gemini 2.5 can emit duplicate tool-input-start / tool-output-available per toolCallId; dedupe so UI gets one per call.
+        const seenToolInputStart = new Set<string>();
+        const seenToolOutputAvailable = new Set<string>();
         const filteredStream = uiStream.pipeThrough(
           new TransformStream({
             transform(chunk, controller) {
-              const type = (chunk as { type?: string }).type;
+              const c = chunk as { type?: string; toolCallId?: string };
+              const type = c.type;
               // Skip the first start & start-step since we already emitted them
               if (type === "start" && !skippedFirstStart) {
                 skippedFirstStart = true;
@@ -176,7 +198,7 @@ export async function POST(req: Request) {
                 }
                 stepCount++;
               }
-              // Only forward reasoning events on step 0
+              // Only forward reasoning on step 0 (optional: model may or may not send reasoning-*)
               if (
                 stepCount > 0 &&
                 (type === "reasoning-start" ||
@@ -184,6 +206,15 @@ export async function POST(req: Request) {
                   type === "reasoning-end")
               ) {
                 return;
+              }
+              // Dedupe: one tool-input-start and one tool-output-available per toolCallId (Gemini 2.5 sends duplicates)
+              if (type === "tool-input-start" && c.toolCallId) {
+                if (seenToolInputStart.has(c.toolCallId)) return;
+                seenToolInputStart.add(c.toolCallId);
+              }
+              if (type === "tool-output-available" && c.toolCallId) {
+                if (seenToolOutputAvailable.has(c.toolCallId)) return;
+                seenToolOutputAvailable.add(c.toolCallId);
               }
               controller.enqueue(chunk);
             },
@@ -195,9 +226,21 @@ export async function POST(req: Request) {
 
     return createUIMessageStreamResponse({ stream });
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Chat API error";
+    const is429 =
+      message.includes("Resource exhausted") ||
+      (error &&
+        typeof error === "object" &&
+        "lastError" in error &&
+        (error as { lastError?: { statusCode?: number } }).lastError
+          ?.statusCode === 429);
     return Response.json(
-      { error: error instanceof Error ? error.message : "Chat API error" },
-      { status: 500 },
+      {
+        error: is429
+          ? "Rate limit exceeded. Please wait a moment and try again."
+          : message,
+      },
+      { status: is429 ? 429 : 500 },
     );
   }
 }

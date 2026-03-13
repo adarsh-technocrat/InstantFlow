@@ -54,12 +54,17 @@ function emitPlanEnd(
   });
 }
 
+export interface PlanningResult {
+  planContext: string;
+}
+
 export async function runPlanningPipeline(
   userPrompt: string,
   vertex: GoogleVertexProvider,
   writer: UIMessageStreamWriter,
   theme: ThemeVariables,
-): Promise<string> {
+): Promise<PlanningResult> {
+  const empty: PlanningResult = { planContext: "" };
   try {
     // Step 1: classifyIntent
     const classifyId = nextPlanCallId("classifyIntent");
@@ -120,13 +125,36 @@ export async function runPlanningPipeline(
         }),
         prompt: `${PLANNER_THEME_PROMPT}\n\nVisual guidelines:\n${guidelines}\n\nUser request:\n${userPrompt}`,
       });
-      const normalized = normalizeThemeVars(themePlan.object.variables);
-      // Apply to the mutable theme object
-      for (const k of Object.keys(theme)) delete theme[k];
-      for (const [k, v] of Object.entries(normalized)) {
-        theme[k] = v;
-      }
-      const builtTheme = { ...theme };
+      // Accept variables from .variables or from root (model may return either shape)
+      const fromVariables =
+        themePlan.object.variables &&
+        typeof themePlan.object.variables === "object"
+          ? (themePlan.object.variables as Record<string, string>)
+          : {};
+      const fromRoot =
+        Object.keys(fromVariables).length > 0
+          ? fromVariables
+          : (() => {
+              const obj = themePlan.object as Record<
+                string,
+                string | number | boolean | null | Record<string, string>
+              >;
+              const record: Record<string, string> = {};
+              for (const [k, v] of Object.entries(obj)) {
+                if (k.startsWith("--") && typeof v === "string") record[k] = v;
+              }
+              return record;
+            })();
+      const normalized = normalizeThemeVars(fromRoot);
+      // Apply when we got variables; otherwise keep existing theme (do not clear)
+      const builtTheme =
+        Object.keys(normalized).length > 0
+          ? (() => {
+              for (const k of Object.keys(theme)) delete theme[k];
+              for (const [k, v] of Object.entries(normalized)) theme[k] = v;
+              return { ...theme };
+            })()
+          : { ...theme };
       emitPlanEnd(writer, themeId, "build_theme", {
         success: true,
         message: "Theme built",
@@ -143,8 +171,9 @@ export async function runPlanningPipeline(
       });
     }
 
-    return `## Planning (from pipeline)\n- Intent: ${intent}\n- Screens to create: ${JSON.stringify(screens, null, 2)}\n- Visual guidelines: ${guidelines}\n- Theme: ${shouldGenerate ? "built and applied" : "skipped"}\n`;
+    const planContext = `## Planning (from pipeline)\n- Intent: ${intent}\n- Screens to create: ${JSON.stringify(screens, null, 2)}\n- Visual guidelines: ${guidelines}\n- Theme: ${shouldGenerate ? "built and applied" : "skipped"}\n`;
+    return { planContext };
   } catch {
-    return "";
+    return empty;
   }
 }
