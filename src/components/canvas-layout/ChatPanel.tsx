@@ -208,14 +208,15 @@ function ReasoningBlock({
   isStreaming?: boolean;
   isComplete?: boolean;
 }) {
-  const [manuallyToggled, setManuallyToggled] = useState(false);
-  const expanded = manuallyToggled ? !isComplete : !!isStreaming && !isComplete;
+  const defaultExpanded = !!isStreaming && !isComplete;
+  const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
+  const expanded = userExpanded !== null ? userExpanded : defaultExpanded;
 
   return (
     <div className="not-prose flex w-full flex-col transition-all">
       <button
         type="button"
-        onClick={() => setManuallyToggled((v) => !v)}
+        onClick={() => setUserExpanded(!expanded)}
         className="inline-flex w-full items-center justify-between gap-1 px-0 py-1 text-left"
       >
         <div className="flex items-center gap-1.5">
@@ -904,7 +905,8 @@ export function ChatPanel({
         (p as MessagePart).type?.startsWith?.("tool-") ||
         (p as MessagePart).type === "dynamic-tool",
     ) ||
-      typeof (lastMsg as { content?: string }).content === "string");
+      (typeof (lastMsg as { content?: string }).content === "string" &&
+        ((lastMsg as { content?: string }).content ?? "").trim().length > 0));
 
   const showStreamingIndicator =
     isActivelyStreaming &&

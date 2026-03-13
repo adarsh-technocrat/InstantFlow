@@ -397,13 +397,13 @@ export function createTools(ctx: ToolContext) {
 
     build_theme: tool({
       description:
-        "Creates or replaces the global theme. Pass theme_vars as an object: CSS variable names (with --) to values. Use for initial theme creation.",
+        'Creates or replaces the global theme. Pass CSS variables as a flat object, e.g. {"--primary":"#2563eb","--background":"#0f172a"}. Use for initial theme creation.',
       inputSchema: z.object({
         description: z.string().optional(),
-        theme_vars: z
+        variables: z
           .record(z.string(), z.string())
           .describe(
-            'Object: CSS variable name -> value, e.g. {"--primary":"#2563eb","--background":"#0f172a"}',
+            'Flat object mapping CSS variable names to values. Example: {"--primary":"#2563eb","--background":"#0f172a","--radius":"0.5rem"}',
           ),
       }),
       onInputStart: ({ toolCallId }) => {
@@ -415,18 +415,18 @@ export function createTools(ctx: ToolContext) {
       },
       execute: async (
         {
-          theme_vars = {},
+          variables = {},
         }: {
           description?: string;
-          theme_vars?: Record<string, string>;
+          variables?: Record<string, string>;
         },
         { toolCallId },
       ) => {
-        if (!theme_vars || typeof theme_vars !== "object") {
+        if (!variables || typeof variables !== "object") {
           const err = {
             success: false,
             error:
-              'theme_vars is required. Pass an object like {"--primary":"#2563eb","--background":"#0f172a"}',
+              'variables is required. Pass an object like {"--primary":"#2563eb","--background":"#0f172a"}',
           };
           writer?.write({
             type: "tool-output-available",
@@ -435,7 +435,7 @@ export function createTools(ctx: ToolContext) {
           });
           return err;
         }
-        const normalized = normalizeThemeVars(theme_vars);
+        const normalized = normalizeThemeVars(variables);
         for (const k of Object.keys(theme)) delete theme[k];
         for (const [k, v] of Object.entries(normalized)) {
           theme[k] = v;

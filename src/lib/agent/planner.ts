@@ -2,6 +2,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import type { UIMessageStreamWriter } from "ai";
 import type { GoogleVertexProvider } from "@ai-sdk/google-vertex";
+import { normalizeThemeVars, type ThemeVariables } from "@/lib/screen-utils";
 
 const PLANNER_CLASSIFY_PROMPT =
   'Given a user request for a mobile app, determine if they want to "generate" (create new screens) or "edit" (modify existing). Reply with intent only.';
@@ -11,6 +12,16 @@ const PLANNER_SCREENS_PROMPT =
 
 const PLANNER_STYLE_PROMPT =
   "Given a user request and the screens to create, provide visual guidelines (colors, mood, typography) and whether to generate (true for new designs).";
+
+const PLANNER_THEME_PROMPT = `\
+Given visual guidelines for a mobile app, generate a complete CSS theme as a flat object.
+Every key must be a CSS variable name starting with --.
+All of these keys are required:
+--background, --foreground, --primary, --primary-foreground, --secondary, --secondary-foreground,
+--muted, --muted-foreground, --card, --card-foreground, --border, --radius, --font-sans, --font-heading.
+
+Values should be hex colors for color tokens, rem values for --radius, and font family strings for fonts.
+Example: {"--primary":"#2563eb","--background":"#0f172a","--radius":"0.75rem","--font-sans":"'Inter', sans-serif"}`;
 
 let planCallCounter = 0;
 
@@ -47,6 +58,7 @@ export async function runPlanningPipeline(
   userPrompt: string,
   vertex: GoogleVertexProvider,
   writer: UIMessageStreamWriter,
+  theme: ThemeVariables,
 ): Promise<string> {
   try {
     // Step 1: classifyIntent
@@ -95,7 +107,43 @@ export async function runPlanningPipeline(
     const { guidelines, shouldGenerate } = stylePlan.object;
     emitPlanEnd(writer, styleId, "planStyle", { guidelines, shouldGenerate });
 
-    return `## Planning (from pipeline)\n- Intent: ${intent}\n- Screens to create: ${JSON.stringify(screens, null, 2)}\n- Visual guidelines: ${guidelines}\n`;
+    // Step 4: buildTheme — generate theme variables from the style guidelines
+    if (shouldGenerate) {
+      const themeId = nextPlanCallId("build_theme");
+      emitPlanStart(writer, themeId, "build_theme");
+      const themePlan = await generateObject({
+        model: vertex("gemini-2.0-flash"),
+        schema: z.object({
+          variables: z
+            .record(z.string(), z.string())
+            .describe("Flat CSS variable map"),
+        }),
+        prompt: `${PLANNER_THEME_PROMPT}\n\nVisual guidelines:\n${guidelines}\n\nUser request:\n${userPrompt}`,
+      });
+      const normalized = normalizeThemeVars(themePlan.object.variables);
+      // Apply to the mutable theme object
+      for (const k of Object.keys(theme)) delete theme[k];
+      for (const [k, v] of Object.entries(normalized)) {
+        theme[k] = v;
+      }
+      const builtTheme = { ...theme };
+      emitPlanEnd(writer, themeId, "build_theme", {
+        success: true,
+        message: "Theme built",
+        theme: builtTheme,
+      });
+      // Emit data event so the ChatPanel applies the theme to the canvas
+      writer.write({
+        type: "data-tool-call-end",
+        data: {
+          toolCallId: themeId,
+          toolName: "build_theme",
+          theme: builtTheme,
+        },
+      });
+    }
+
+    return `## Planning (from pipeline)\n- Intent: ${intent}\n- Screens to create: ${JSON.stringify(screens, null, 2)}\n- Visual guidelines: ${guidelines}\n- Theme: ${shouldGenerate ? "built and applied" : "skipped"}\n`;
   } catch {
     return "";
   }

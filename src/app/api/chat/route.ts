@@ -78,8 +78,13 @@ export async function POST(req: Request) {
 
         // 1. Planning pipeline (if initial request) — emits data events into the already-started message
         let planContext = "";
-        if (isInitialPrompt(frames, theme) && userPrompt.trim()) {
-          planContext = await runPlanningPipeline(userPrompt, vertex, writer);
+        if (isInitialPrompt(frames) && userPrompt.trim()) {
+          planContext = await runPlanningPipeline(
+            userPrompt,
+            vertex,
+            writer,
+            theme,
+          );
         }
 
         // 2. Create tools with mutable context and writer for streaming step events
