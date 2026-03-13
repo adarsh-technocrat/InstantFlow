@@ -81,7 +81,6 @@ async function streamScreenHtmlWithDesignModel(
       model: vertex(modelId),
       prompt,
       maxOutputTokens: options?.maxOutputTokens ?? 16384,
-      providerOptions: DESIGN_MODEL_PROVIDER_OPTIONS,
     });
     let accumulated = "";
     for await (const part of result.textStream) {
@@ -176,13 +175,25 @@ export function createTools(ctx: ToolContext) {
 
     create_screen: tool({
       description:
-        "Creates a new screen. The design model generates the HTML from the screen name and description (e.g. from the plan).",
+        "Creates a new screen at an optional canvas position (left, top in pixels). The design model generates the HTML from the screen name and description (e.g. from the plan).",
       inputSchema: z.object({
         name: z.string().describe("Screen label/name"),
         description: z
           .string()
           .describe(
             "Description of the screen content and layout (e.g. from the plan).",
+          ),
+        left: z
+          .number()
+          .optional()
+          .describe(
+            "X position on the canvas in pixels. Use when you know where the frame should be placed.",
+          ),
+        top: z
+          .number()
+          .optional()
+          .describe(
+            "Y position on the canvas in pixels. Use when you know where the frame should be placed.",
           ),
       }),
       onInputStart: ({ toolCallId }) => {
@@ -206,6 +217,21 @@ export function createTools(ctx: ToolContext) {
           top,
           html: "",
         });
+        // Emit so the client adds the frame on canvas immediately; stream will update it live.
+        writer?.write({
+          type: "data-tool-call-start",
+          data: {
+            toolCallId,
+            toolName: "create_screen",
+            frame: {
+              id: frameId,
+              label: "Loading…",
+              left,
+              top,
+              html: "",
+            },
+          },
+        });
       },
       onInputDelta: ({ toolCallId, inputTextDelta }) => {
         const state = createScreenStreamState.get(toolCallId);
@@ -220,9 +246,41 @@ export function createTools(ctx: ToolContext) {
           frame.label = parsed.name;
           state.lastEmit = now;
         }
+        if (
+          parsed?.left !== undefined &&
+          parsed?.top !== undefined &&
+          (parsed.left !== frame.left || parsed.top !== frame.top)
+        ) {
+          frame.left = parsed.left;
+          frame.top = parsed.top;
+          state.lastEmit = now;
+          writer?.write({
+            type: "data-tool-call-delta",
+            data: {
+              toolCallId,
+              toolName: "create_screen",
+              frame: {
+                id: toolCallId,
+                label: frame.label,
+                left: frame.left,
+                top: frame.top,
+              },
+            },
+          });
+        }
       },
       execute: async (
-        { name, description }: { name: string; description: string },
+        {
+          name,
+          description,
+          left: argLeft,
+          top: argTop,
+        }: {
+          name: string;
+          description: string;
+          left?: number;
+          top?: number;
+        },
         { toolCallId },
       ) => {
         if (!designModel?.vertex || !designModel?.modelId) {
@@ -267,10 +325,20 @@ export function createTools(ctx: ToolContext) {
         if (frame) {
           frame.label = name;
           frame.html = wrappedHtml;
+          if (argLeft !== undefined && argTop !== undefined) {
+            frame.left = argLeft;
+            frame.top = argTop;
+          }
         } else {
           const lastFrame = frames[frames.length - 1];
-          const left = lastFrame ? lastFrame.left + FRAME_SPACING : 0;
-          const top = lastFrame ? lastFrame.top : 0;
+          const left =
+            argLeft !== undefined && argTop !== undefined
+              ? argLeft
+              : lastFrame
+                ? lastFrame.left + FRAME_SPACING
+                : 0;
+          const top =
+            argTop !== undefined ? argTop : lastFrame ? lastFrame.top : 0;
           frames.push({
             id: toolCallId,
             label: name,

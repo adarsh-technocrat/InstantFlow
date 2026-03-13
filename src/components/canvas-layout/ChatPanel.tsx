@@ -648,9 +648,16 @@ export function ChatPanel({
 
       if (ev.type === "data-tool-call-delta") {
         if (data.toolName === "create_screen" && data.frame) {
-          const changes: { label?: string; html?: string } = {};
+          const changes: {
+            label?: string;
+            html?: string;
+            left?: number;
+            top?: number;
+          } = {};
           if (data.frame.label !== undefined) changes.label = data.frame.label;
           if (data.frame.html !== undefined) changes.html = data.frame.html;
+          if (data.frame.left !== undefined) changes.left = data.frame.left;
+          if (data.frame.top !== undefined) changes.top = data.frame.top;
           if (Object.keys(changes).length > 0) {
             dispatch(updateFrame({ id: data.frame.id, changes }));
           }
@@ -705,6 +712,8 @@ export function ChatPanel({
               changes: {
                 label: data.frame.label,
                 html: data.frame.html,
+                ...(data.frame.left !== undefined && { left: data.frame.left }),
+                ...(data.frame.top !== undefined && { top: data.frame.top }),
               },
             }),
           );

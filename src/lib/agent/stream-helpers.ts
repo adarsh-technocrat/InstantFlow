@@ -15,11 +15,11 @@ export interface UpdateScreenStreamState {
 
 /**
  * Attempt to parse partial JSON for create_screen args.
- * Repairs unterminated strings/objects so we can extract name and description early.
+ * Repairs unterminated strings/objects so we can extract name, description, and position (left, top) early.
  */
 export function parseCreateScreenPartial(
   text: string,
-): { name?: string; description?: string } | null {
+): { name?: string; description?: string; left?: number; top?: number } | null {
   if (!text || typeof text !== "string") return null;
   try {
     let repaired = text.trim();
@@ -36,6 +36,8 @@ export function parseCreateScreenPartial(
     const parsed = JSON.parse(repaired) as {
       name?: string;
       description?: string;
+      left?: number;
+      top?: number;
     };
     return parsed && typeof parsed === "object" ? parsed : null;
   } catch {

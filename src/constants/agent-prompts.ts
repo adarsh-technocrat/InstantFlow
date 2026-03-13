@@ -32,7 +32,9 @@ You communicate in short, direct messages and never announce what you're about t
 
 // 2. Background ───────────────────────────────────────────────────────────────
 
-function buildBackground(frames: Array<{ id: string; label: string }>): string {
+function buildBackground(
+  frames: Array<{ id: string; label: string; left?: number; top?: number }>,
+): string {
   if (!Array.isArray(frames) || frames.length === 0) {
     return `\
 <background>
@@ -41,7 +43,12 @@ function buildBackground(frames: Array<{ id: string; label: string }>): string {
 </background>`;
   }
 
-  const rows = frames.map((f) => `    | ${f.id} | ${f.label} |`).join("\n");
+  const rows = frames
+    .map(
+      (f) =>
+        `    | ${f.id} | ${f.label} | ${f.left ?? "-"} | ${f.top ?? "-"} |`,
+    )
+    .join("\n");
 
   return `\
 <background>
@@ -50,9 +57,11 @@ function buildBackground(frames: Array<{ id: string; label: string }>): string {
 
   <current_screens>
     Use the exact id values below — never use positional numbers like "1" or "2".
+    Positions (left, top) are in canvas pixels. When creating a new screen you may pass
+    left and top to place it at a specific position; otherwise it is placed after the last frame.
 
-    | id | label |
-    |----|-------|
+    | id | label | left (x) | top (y) |
+    |----|-------|----------|---------|
 ${rows}
   </current_screens>
 </background>`;
@@ -155,8 +164,8 @@ const TOOL_GUIDANCE = `\
     Example: {"--primary": "#1d4ed8"}
   </tool>
 
-  <tool name="create_screen(name, description)">
-    Creates a new screen. Pass the screen name and description (e.g. from the plan). The design model generates the HTML.
+  <tool name="create_screen(name, description, left?, top?)">
+    Creates a new screen. Pass name and description (e.g. from the plan). Optionally pass left and top (canvas position in pixels) to place the frame at a specific position; if omitted, the frame is placed after the last screen. The design model generates the HTML. The new screen appears on the canvas immediately and the generated HTML streams into it live.
   </tool>
 
   <tool name="edit_screen(id, find, replace)">
@@ -224,7 +233,12 @@ const OUTPUT_CONSTRAINTS = `\
 // ---------------------------------------------------------------------------
 
 export function getSystemPrompt(
-  frames: Array<{ id: string; label: string }> = [],
+  frames: Array<{
+    id: string;
+    label: string;
+    left?: number;
+    top?: number;
+  }> = [],
   _theme: Record<
     string,
     string | number | boolean | null | undefined
