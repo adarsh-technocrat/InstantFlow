@@ -146,7 +146,12 @@ export async function POST(req: Request) {
           maxRetries: 1,
           providerOptions: {
             google: {
-              thinkingConfig: { thinkingLevel: "low", includeThoughts: true },
+              thinkingConfig: {
+                // thinkingLevel: "low",
+                includeThoughts: true,
+                // Limits total thinking tokens for the whole request; step 0 uses most, later steps get little/none.
+                thinkingBudget: 2048,
+              },
             },
           },
         });
@@ -171,7 +176,7 @@ export async function POST(req: Request) {
                 }
                 stepCount++;
               }
-              // Only allow reasoning on the first step (step 0)
+              // Only forward reasoning events on step 0
               if (
                 stepCount > 0 &&
                 (type === "reasoning-start" ||
