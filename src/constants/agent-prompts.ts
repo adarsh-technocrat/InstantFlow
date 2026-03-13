@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 export function isInitialPrompt(
-  frames: Array<Record<string, string | number | boolean | null | undefined>>,
+  frames: Array<{ id: string; label: string }>,
 ): boolean {
   return !Array.isArray(frames) || frames.length === 0;
 }
@@ -32,9 +32,7 @@ You communicate in short, direct messages and never announce what you're about t
 
 // 2. Background ───────────────────────────────────────────────────────────────
 
-function buildBackground(
-  frames: Array<Record<string, string | number | boolean | null | undefined>>,
-): string {
+function buildBackground(frames: Array<{ id: string; label: string }>): string {
   if (!Array.isArray(frames) || frames.length === 0) {
     return `\
 <background>
@@ -43,9 +41,7 @@ function buildBackground(
 </background>`;
   }
 
-  const rows = (frames as { id: string; label: string }[])
-    .map((f) => `    | ${f.id} | ${f.label} |`)
-    .join("\n");
+  const rows = frames.map((f) => `    | ${f.id} | ${f.label} |`).join("\n");
 
   return `\
 <background>
@@ -228,9 +224,7 @@ const OUTPUT_CONSTRAINTS = `\
 // ---------------------------------------------------------------------------
 
 export function getSystemPrompt(
-  frames: Array<
-    Record<string, string | number | boolean | null | undefined>
-  > = [],
+  frames: Array<{ id: string; label: string }> = [],
   _theme: Record<
     string,
     string | number | boolean | null | undefined
