@@ -1,5 +1,27 @@
+import { readFileSync } from "fs";
+import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { getFrame } from "../frames/store";
+import { injectFrameScripts } from "@/lib/screen-utils";
+
+function getElementInspectorScript(): string {
+  const scriptPath = path.join(
+    process.cwd(),
+    "src/lib/iframe/element-inspector.js",
+  );
+  return readFileSync(scriptPath, "utf-8");
+}
+
+function injectElementInspectorScript(
+  html: string,
+  scriptContent: string,
+): string {
+  const scriptTag = `<script>${scriptContent}</script>`;
+  if (html.includes("</body>")) {
+    return html.replace("</body>", `${scriptTag}</body>`);
+  }
+  return html + scriptTag;
+}
 
 export async function GET(req: NextRequest) {
   const frameId = req.nextUrl.searchParams.get("frameId");
@@ -15,11 +37,14 @@ export async function GET(req: NextRequest) {
       },
     );
   }
-  const scrollbarHideStyle =
-    "<style>html,body{-ms-overflow-style:none;scrollbar-width:none}html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}</style>";
-  const html = rawHtml.includes("</head>")
-    ? rawHtml.replace("</head>", `${scrollbarHideStyle}</head>`)
-    : rawHtml.replace(/<body(\s[^>]*)?>/i, `${scrollbarHideStyle}<body$1>`);
+
+  const elementInspectorScript = getElementInspectorScript();
+
+  const html = injectElementInspectorScript(
+    injectFrameScripts(rawHtml),
+    elementInspectorScript,
+  );
+
   return new NextResponse(html, {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
