@@ -58,10 +58,6 @@ import type { AgentInstance } from "@/store/slices/agentSlice";
 import ReactMarkdown from "react-markdown";
 import { Brain, ChevronDown } from "lucide-react";
 
-// ---------------------------------------------------------------------------
-// Shared types & helpers (mirrored from ChatPanel)
-// ---------------------------------------------------------------------------
-
 interface ToolStep {
   toolCallId: string;
   toolName: string;
@@ -174,10 +170,6 @@ function toolStepsFromParts(
   }
   return steps.length > 0 ? steps : undefined;
 }
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
 
 const CheckIcon = (
   <svg
@@ -397,10 +389,6 @@ function AssistantMessageContent({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
-
 interface AgentChatInstanceProps {
   agent: AgentInstance;
   isActive: boolean;
@@ -416,7 +404,6 @@ export function AgentChatInstance({
   const dispatch = useAppDispatch();
   const frames = useAppSelector((s) => s.canvas.frames);
   const theme = useAppSelector((s) => s.canvas.theme);
-  // Keep dispatchRef in sync for the throttled HTML updater
   dispatchRef = dispatch;
 
   const stateRef = useRef({ frames, theme });
@@ -458,7 +445,6 @@ export function AgentChatInstance({
             messageId: options.messageId,
             frames: stateRef.current.frames,
             theme: stateRef.current.theme,
-            // Multi-agent metadata
             agentId: agent.id,
             agentName: agent.name,
             subTask: agent.subTask,
@@ -618,7 +604,6 @@ export function AgentChatInstance({
           data.frame?.html !== undefined
         ) {
           enqueueHtmlUpdate(data.frame.id, data.frame.html);
-          // Move cursor to the frame being designed
           if (data.toolName === "design_screen") {
             dispatch(
               updateAgentActiveFrame({
@@ -632,7 +617,6 @@ export function AgentChatInstance({
       }
 
       if (ev.type === "data-tool-call-end") {
-        // Flush any throttled HTML updates before applying final state
         flushHtmlUpdatesNow();
         const endInput: { id?: string; name?: string } = {};
         if (data.frame?.id) endInput.id = data.frame.id;
@@ -684,7 +668,6 @@ export function AgentChatInstance({
       setToolSteps([]);
       if (!isAbort && !isError && stepsToPersist.length > 0) {
         setLastMessageToolSteps([...stepsToPersist]);
-        // Persist tool steps into the last assistant message
         const lastIdx = finishedMessages.length - 1;
         const lastMsg = finishedMessages[lastIdx];
         if (lastMsg?.role === "assistant") {
@@ -704,7 +687,6 @@ export function AgentChatInstance({
             parts: [...stepParts, ...existingParts],
           } as typeof lastMsg;
           setMessages(updated);
-          // Save to DB with agentId
           fetch("/api/chat/sessions", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -716,7 +698,6 @@ export function AgentChatInstance({
         }
       } else {
         setLastMessageToolSteps([]);
-        // Save on finish even without tool steps
         if (!isAbort && !isError && finishedMessages.length > 0) {
           fetch("/api/chat/sessions", {
             method: "POST",
@@ -734,12 +715,10 @@ export function AgentChatInstance({
           status: isError ? "error" : "done",
         }),
       );
-      // Clear cursor when agent finishes
       dispatch(updateAgentActiveFrame({ id: agent.id, frameId: null }));
     },
   });
 
-  // Hydrate persisted messages from DB on mount, then auto-send sub-task.
   const sendMessageRef = useRef(sendMessage);
   sendMessageRef.current = sendMessage;
   const hasHydrated = useRef(false);
@@ -762,12 +741,10 @@ export function AgentChatInstance({
           "messages",
         );
         if (data?.messages && data.messages.length > 0) {
-          // Agent already has persisted history — restore it, skip auto-send
           console.log(
             `[Agent ${agent.name}] restoring persisted history, marking done`,
           );
           setMessages(data.messages);
-          // Restore tool steps from the last assistant message parts
           const lastAssistant = [...data.messages]
             .reverse()
             .find((m) => m.role === "assistant");
@@ -777,12 +754,10 @@ export function AgentChatInstance({
             );
             if (restored?.length) setLastMessageToolSteps(restored);
           }
-          // Mark agent as done since it has completed history
           if (agent.status === "idle") {
             dispatch(updateAgentStatus({ id: agent.id, status: "done" }));
           }
         } else {
-          // No persisted history — auto-send the sub-task (staggered)
           const delay = parseInt(agent.id) * 500;
           console.log(
             `[Agent ${agent.name}] no history — will auto-send in ${delay}ms`,
@@ -796,7 +771,6 @@ export function AgentChatInstance({
         }
       })
       .catch((err) => {
-        // On fetch error, fall back to auto-send
         console.warn(
           `[Agent ${agent.name}] session fetch error, falling back to auto-send`,
           err,
@@ -809,7 +783,6 @@ export function AgentChatInstance({
           dispatch(updateAgentStatus({ id: agent.id, status: "working" }));
           sendMessageRef.current({ text: agent.subTask });
         }, delay);
-        // Can't return cleanup from .catch, so store timer ref
         cleanupTimerRef.current = timer;
       });
 
@@ -819,7 +792,6 @@ export function AgentChatInstance({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Debounced persistence — save messages periodically while streaming
   const persistTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (messages.length === 0 || status === "streaming") return;

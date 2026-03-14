@@ -85,8 +85,6 @@ export function useFrameInteraction({
     };
   }, []);
 
-  // Capture-phase listener on frame: intercepts zoom (ctrl+wheel, trackpad pinch)
-  // before events reach container. Overlay alone fails for trackpad (no keydown).
   useEffect(() => {
     if (!onWheelForZoom || !frameRef.current) return;
     const el = frameRef.current;

@@ -30,14 +30,11 @@ export async function POST(req: Request) {
       : [];
     const theme: ThemeVariables = { ...(body?.theme ?? {}) };
 
-    // Run planning pipeline if this is an initial prompt (no existing frames)
     let planContext = "";
     let plannedScreens: Array<{ name: string; description: string }> = [];
     const planEvents: Array<{ type: string; data?: unknown }> = [];
 
     if (isInitialPrompt(initialFrames) && prompt.trim()) {
-      // We need a mock writer to capture planning events
-      // Planning runs serverside; we extract results without streaming
       const mockWriter = {
         write: (event: { type: string; [key: string]: unknown }) => {
           planEvents.push(event);
@@ -52,7 +49,6 @@ export async function POST(req: Request) {
       );
       planContext = planning.planContext;
 
-      // Extract planned screens from planContext
       const screensMatch = planContext.match(
         /Screens to create:\s*([\s\S]*?)(?:\n-\s*Visual|$)/,
       );
@@ -65,11 +61,9 @@ export async function POST(req: Request) {
             plannedScreens = JSON.parse(jsonStr[1]);
           }
         } catch {
-          // fallback: parse from plan context
         }
       }
 
-      // Also try to extract from plan events
       if (plannedScreens.length === 0) {
         for (const ev of planEvents) {
           const output = (
@@ -87,7 +81,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // Decompose the task among agents
     const decomposition = await decomposeTask(
       prompt,
       agentCount,
@@ -96,8 +89,6 @@ export async function POST(req: Request) {
       plannedScreens,
     );
 
-    // Pre-assign frame positions to avoid collisions
-    // Each agent's screens get offset by agentIndex * (screenCount * 420)
     const FRAME_WIDTH = 393;
     const FRAME_GAP = 27;
     const FRAME_STEP = FRAME_WIDTH + FRAME_GAP;
@@ -115,9 +106,7 @@ export async function POST(req: Request) {
       })(),
     }));
 
-    // Extract theme from planning events or from the mutated theme object
     let builtTheme = { ...theme };
-    // Fallback: check plan events for theme data
     if (Object.keys(builtTheme).length === 0) {
       for (const ev of planEvents) {
         const evData = ev as {

@@ -73,7 +73,6 @@ export const FramePreview = React.forwardRef<
   const preparedHtml = useMemo(() => {
     if (!html) return "";
     if (looksLikeMalformedFrameContent(html)) return "";
-    // Strip any trailing incomplete tag so the browser never renders raw source
     const safeHtml = truncatePartialHtml(html);
     if (!safeHtml) return "";
     let out = injectFrameScripts(safeHtml);
@@ -101,8 +100,6 @@ export const FramePreview = React.forwardRef<
     };
   }, [frameId, html, label, left, top, isStreaming]);
 
-  // When the inspector script arrives after content is already written,
-  // force a full doc.write so the script executes (innerHTML won't run scripts).
   const forceFullWriteRef = useRef(false);
   useEffect(() => {
     if (inspectorScript && latestHtmlRef.current) {
@@ -110,7 +107,6 @@ export const FramePreview = React.forwardRef<
     }
   }, [inspectorScript]);
 
-  // Track previous html length to detect streaming (rapid successive updates)
   const prevHtmlLenRef = useRef(0);
   const lastWriteTimeRef = useRef(0);
 
@@ -119,7 +115,6 @@ export const FramePreview = React.forwardRef<
     latestHtmlRef.current = preparedHtml;
 
     const doWrite = (incremental: boolean) => {
-      // Force full write when inspector script just became available
       if (forceFullWriteRef.current) {
         forceFullWriteRef.current = false;
         incremental = false;
@@ -134,20 +129,18 @@ export const FramePreview = React.forwardRef<
     const htmlGrew = preparedHtml.length > prevHtmlLenRef.current;
     prevHtmlLenRef.current = preparedHtml.length;
 
-    // If HTML is growing rapidly (streaming), throttle writes and use incremental body patching
     if (htmlGrew && timeSinceLastWrite < WRITE_THROTTLE_MS * 2) {
-      if (writeTimeoutRef.current) return; // already scheduled
+      if (writeTimeoutRef.current) return;
       writeTimeoutRef.current = setTimeout(() => {
         writeTimeoutRef.current = null;
-        doWrite(true); // incremental — patch body only, no bounce
+        doWrite(true);
       }, WRITE_THROTTLE_MS);
     } else {
-      // Not streaming or enough time has passed — full write so scripts execute
       if (writeTimeoutRef.current) {
         clearTimeout(writeTimeoutRef.current);
         writeTimeoutRef.current = null;
       }
-      doWrite(false); // full doc.write
+      doWrite(false);
     }
 
     return () => {

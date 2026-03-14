@@ -26,7 +26,6 @@ import ReactMarkdown from "react-markdown";
 import { ImageIcon } from "@/lib/svg-icons";
 import { PageMentionInput } from "./PageMentionInput";
 
-// ─── Throttled frame HTML updater for single-agent streaming ──────────────
 const CP_THROTTLE_MS = 300;
 let cpPendingHtml = new Map<string, string>();
 let cpFlushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -124,7 +123,6 @@ function getToolDisplayLabel(
   return isCalled ? base : `${base}…`;
 }
 
-/** JSON-serializable value for tool input/output. */
 type JsonValue =
   | string
   | number
@@ -576,7 +574,6 @@ export function ChatPanel({
       }
       const ev = dataPart as DataPartEvent;
 
-      // ─── Spawn-agents event (multi-agent orchestration from chat API) ───
       if (ev.type === "data-spawn-agents" && ev.data) {
         const spawnData = ev.data as unknown as {
           orchestrationId?: string;
@@ -602,7 +599,6 @@ export function ChatPanel({
               keepOrchestratorActive: true,
             }),
           );
-          // Persist orchestration state for page reload recovery
           fetch("/api/chat/sessions", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -789,11 +785,9 @@ export function ChatPanel({
 
       if (ev.type === "data-tool-call-delta") {
         if (data.toolName === "design_screen" && data.frame) {
-          // Throttle HTML updates during streaming deltas
           if (data.frame.html !== undefined) {
             cpEnqueueHtml(data.frame.id, data.frame.html);
           }
-          // Label updates are infrequent, dispatch immediately
           if (data.frame.label !== undefined) {
             dispatch(
               updateFrame({
@@ -901,7 +895,6 @@ export function ChatPanel({
         } else if (data.toolName === "build_theme" && data.theme) {
           dispatch(replaceTheme(data.theme));
         }
-        // Reset main chat cursor when tool finishes
         dispatch(setMainChatAgentFrame({ frameId: null, status: "idle" }));
         return;
       }
@@ -959,7 +952,6 @@ export function ChatPanel({
     if (hasHydratedFromProject.current) return;
     hasHydratedFromProject.current = true;
 
-    // Hydrate single-agent messages
     fetch("/api/chat/sessions")
       .then((res) => res.json())
       .then((data: { messages?: UIMessage[] }) => {
@@ -970,7 +962,6 @@ export function ChatPanel({
       .catch(() => {})
       .finally(() => setIsLoadingHistory(false));
 
-    // Restore multi-agent orchestration state if it exists
     if (!orchestrationId) {
       fetch("/api/chat/sessions?agentId=__orchestration__")
         .then((res) => res.json())
@@ -1125,7 +1116,6 @@ export function ChatPanel({
     toolSteps.length === 0 &&
     !showPendingBubble &&
     !lastMsgHasContent;
-  // ─────────────────────────────────────────────────────────────────────────────
 
   return (
     <div
@@ -1171,7 +1161,6 @@ export function ChatPanel({
                     </>
                   );
                 }
-                // Default: show first persona (Pixel) for both single-agent and orchestrator view
                 return (
                   <>
                     <span className="text-sm">{AGENT_PERSONAS[0].emoji}</span>
@@ -1333,7 +1322,6 @@ export function ChatPanel({
           </div>
         )}
 
-        {/* ─── Orchestrator / single-agent: show main chat ─────────────────────────── */}
         {(!isMultiAgent || activeAgentId === null) && isLoadingHistory && (
           <ChatHistoryShimmer />
         )}
@@ -1470,7 +1458,6 @@ export function ChatPanel({
           </div>
         )}
 
-        {/* "Working…" spinner — only when no steps and no content yet */}
         {(!isMultiAgent || activeAgentId === null) &&
           showStreamingIndicator && <StreamingActivityIndicator />}
       </div>

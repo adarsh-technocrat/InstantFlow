@@ -1,8 +1,3 @@
-/**
- * Partial JSON parsing utilities for streaming tool arguments.
- * Enables real-time canvas updates while the model is still generating HTML.
- */
-
 export interface CreateScreenStreamState {
   buffer: string;
   lastEmit: number;
@@ -13,10 +8,6 @@ export interface UpdateScreenStreamState {
   lastEmit: number;
 }
 
-/**
- * Attempt to parse partial JSON for create_screen args.
- * Repairs unterminated strings/objects so we can extract name, description, and position (left, top) early.
- */
 export function parseCreateScreenPartial(
   text: string,
 ): { name?: string; description?: string; left?: number; top?: number } | null {
@@ -45,9 +36,6 @@ export function parseCreateScreenPartial(
   }
 }
 
-/**
- * Attempt to parse partial JSON for update_screen args.
- */
 export function parseUpdateScreenPartial(
   text: string,
 ): { id?: string; description?: string } | null {

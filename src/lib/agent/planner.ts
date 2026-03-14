@@ -66,7 +66,6 @@ export async function runPlanningPipeline(
 ): Promise<PlanningResult> {
   const empty: PlanningResult = { planContext: "" };
   try {
-    // Step 1: classifyIntent
     const classifyId = nextPlanCallId("classifyIntent");
     emitPlanStart(writer, classifyId, "classifyIntent");
     const classify = await generateObject({
@@ -77,7 +76,6 @@ export async function runPlanningPipeline(
     const intent = classify.object.intent;
     emitPlanEnd(writer, classifyId, "classifyIntent", { intent });
 
-    // Step 2: planScreens (only if generate)
     let screens: Array<{ name: string; description: string }> = [];
     const screensId = nextPlanCallId("planScreens");
     emitPlanStart(writer, screensId, "planScreens");
@@ -98,7 +96,6 @@ export async function runPlanningPipeline(
     }
     emitPlanEnd(writer, screensId, "planScreens", { screens });
 
-    // Step 3: planStyle
     const styleId = nextPlanCallId("planStyle");
     emitPlanStart(writer, styleId, "planStyle");
     const stylePlan = await generateObject({
@@ -112,7 +109,6 @@ export async function runPlanningPipeline(
     const { guidelines, shouldGenerate } = stylePlan.object;
     emitPlanEnd(writer, styleId, "planStyle", { guidelines, shouldGenerate });
 
-    // Step 4: buildTheme — generate theme variables from the style guidelines
     if (shouldGenerate) {
       const themeId = nextPlanCallId("build_theme");
       emitPlanStart(writer, themeId, "build_theme");
@@ -125,7 +121,6 @@ export async function runPlanningPipeline(
         }),
         prompt: `${PLANNER_THEME_PROMPT}\n\nVisual guidelines:\n${guidelines}\n\nUser request:\n${userPrompt}`,
       });
-      // Accept variables from .variables or from root (model may return either shape)
       const fromVariables =
         themePlan.object.variables &&
         typeof themePlan.object.variables === "object"
@@ -146,7 +141,6 @@ export async function runPlanningPipeline(
               return record;
             })();
       const normalized = normalizeThemeVars(fromRoot);
-      // Apply when we got variables; otherwise keep existing theme (do not clear)
       const builtTheme =
         Object.keys(normalized).length > 0
           ? (() => {
@@ -160,7 +154,6 @@ export async function runPlanningPipeline(
         message: "Theme built",
         theme: builtTheme,
       });
-      // Emit data event so the ChatPanel applies the theme to the canvas
       writer.write({
         type: "data-tool-call-end",
         data: {

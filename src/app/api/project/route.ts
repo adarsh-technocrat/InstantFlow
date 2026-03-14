@@ -30,7 +30,6 @@ export async function GET(req: NextRequest) {
       html: f.html,
     }));
 
-    // Load the default (single-agent) session messages
     const defaultSession = project.chatSessions.find(
       (s) => s.agentId === "default",
     );

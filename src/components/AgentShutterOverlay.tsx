@@ -4,14 +4,9 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useAppSelector } from "@/store/hooks";
 import { FRAME_WIDTH, FRAME_HEIGHT } from "@/lib/canvas-utils";
 
-// Border radius that matches the phone clip-path curve
 const FRAME_BORDER_RADIUS = 40;
-// Duration of the single shutter sweep (ms)
 const SHUTTER_DURATION_MS = 1800;
-// Fade-out duration after sweep completes
 const FADE_OUT_MS = 400;
-
-// ─── Single one-shot shutter overlay ────────────────────────────────────
 
 function FrameShutterOnce({
   frameId,
@@ -33,12 +28,10 @@ function FrameShutterOnce({
   const [fadingOut, setFadingOut] = useState(false);
 
   useEffect(() => {
-    // After the sweep animation completes, start fading out
     const sweepTimer = setTimeout(() => {
       setFadingOut(true);
     }, SHUTTER_DURATION_MS);
 
-    // After fade-out, signal removal
     const removeTimer = setTimeout(() => {
       onDone(frameId);
     }, SHUTTER_DURATION_MS + FADE_OUT_MS);
@@ -64,7 +57,6 @@ function FrameShutterOnce({
         transition: `opacity ${FADE_OUT_MS}ms ease-out`,
       }}
     >
-      {/* Gradient sheet growing top→bottom — plays once */}
       <div
         className="absolute inset-x-0 top-0 w-full"
         style={{
@@ -72,7 +64,6 @@ function FrameShutterOnce({
           animation: `shutter-grow ${SHUTTER_DURATION_MS}ms ease-out forwards`,
         }}
       />
-      {/* Glowing scan line — sweeps once */}
       <div
         className="absolute left-0 right-0"
         style={{
@@ -111,7 +102,6 @@ export function AgentShutterOverlays() {
     >
   >(new Map());
 
-  // Detect newly created frames that an agent is working on (or single-agent main chat)
   useEffect(() => {
     const workingAgents = agents.filter(
       (a) => a.status === "working" && a.activeFrameId,

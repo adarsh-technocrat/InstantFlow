@@ -1,7 +1,3 @@
-/**
- * Triggers the iframe to send IFRAME_READY by posting REQUEST_READY
- * when the iframe document is ready (element-inspector responds to it).
- */
 export function createTriggerIframeReady(
   getIframe: () => HTMLIFrameElement | null,
   options: {

@@ -112,7 +112,6 @@ function MoreIcon() {
 const toolbarButtonClass =
   "inline-flex size-6 shrink-0 items-center justify-center rounded-md text-sm font-medium text-white/90 outline-none transition-[color,box-shadow,scale] hover:bg-white/10 focus-visible:ring-[3px] focus-visible:ring-(--ring)/50 active:scale-95 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0";
 
-/** Desired gap between frame and toolbar in screen pixels (stays constant when zooming) */
 const TOOLBAR_GAP_SCREEN_PX = 48;
 
 export interface FrameToolbarProps {

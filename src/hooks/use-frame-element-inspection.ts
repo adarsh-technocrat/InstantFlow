@@ -208,7 +208,6 @@ export function useFrameElementInspection({
           }
         }
       } catch {
-        /* cross-origin fallback */
       }
       sendToIframe("SYNC_TEXT", {
         elementId: selectedElement.elementId,

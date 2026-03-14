@@ -44,7 +44,6 @@ function getTextWithMentions(root: Node): string {
   return out;
 }
 
-/** Creates a chip element for a page. */
 function createChipElement(label: string, id: string): HTMLSpanElement {
   const span = document.createElement("span");
   span.contentEditable = "false";
@@ -57,7 +56,6 @@ function createChipElement(label: string, id: string): HTMLSpanElement {
   return span;
 }
 
-/** Returns { node, offset } for the given character offset in container. */
 function getNodeAtOffset(
   container: Node,
   targetOffset: number,

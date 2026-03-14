@@ -269,7 +269,6 @@ export function useCanvasInteraction({
       const containerX = e.clientX - rect.left;
       const containerY = e.clientY - rect.top;
       const isZoom = e.ctrlKey || e.metaKey;
-      // When zooming over selected frame, route to frame handler (avoids browser zoom + correct behavior)
       if (isZoom && (e.target as Element).closest?.("[data-frame-zoom]")) {
         handleWheelFromFrame({
           clientX: e.clientX,

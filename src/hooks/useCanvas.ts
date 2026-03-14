@@ -17,10 +17,11 @@ import {
   type FrameState,
 } from "@/store/slices/canvasSlice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { computeFitViewTransform, type FitViewPadding } from "@/lib/canvas-utils";
 
 export const CANVAS_ZOOM = {
-  MIN: 0.05, // 5%
-  MAX: 8, // 800%
+  MIN: 0.05,
+  MAX: 8,
   STEP: 0.1,
   WHEEL_SENSITIVITY: 0.001,
   WHEEL_MAX_FACTOR: 0.92,
@@ -55,12 +56,6 @@ export function useCanvas() {
     );
   }, [dispatch, transform.scale]);
 
-  /**
-   * Zoom at cursor position with smooth proportional scaling from wheel delta.
-   * @param containerX - cursor X relative to canvas container
-   * @param containerY - cursor Y relative to canvas container
-   * @param deltaY - wheel event deltaY (positive = zoom out, negative = zoom in)
-   */
   const zoomCanvasAtCursorPosition = useCallback(
     (containerX: number, containerY: number, deltaY: number) => {
       const { x, y, scale } = transform;
@@ -123,28 +118,35 @@ export function useCanvas() {
     [dispatch],
   );
 
+  const fitView = useCallback(
+    (containerEl: HTMLElement | null, padding?: FitViewPadding, maxZoom?: number) => {
+      if (!containerEl || frames.length === 0) return;
+      const { width, height } = containerEl.getBoundingClientRect();
+      const result = computeFitViewTransform(frames, width, height, padding, maxZoom);
+      if (result) dispatch(setTransform(result));
+    },
+    [dispatch, frames],
+  );
+
   const zoomPercent = Math.round(transform.scale * 100);
 
   return {
-    // State
     transform,
     frames,
     selectedFrameIds,
     theme,
     zoomPercent,
 
-    // Selection
     setSelectedFrameIds,
     toggleFrameSelectionState,
 
-    // Transform
     updateCanvasTransform,
     setCanvasZoomScale,
     increaseCanvasZoom,
     decreaseCanvasZoom,
     zoomCanvasAtCursorPosition,
+    fitView,
 
-    // Frames
     addNewFrameToCanvas,
     updateFrameProperties,
     removeFrameFromCanvas,

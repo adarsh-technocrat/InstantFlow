@@ -2,10 +2,6 @@
 
 import { useCallback, useEffect, useRef } from "react";
 
-/**
- * Extract <body>…</body> inner content from a full HTML document string.
- * Returns null if no <body> tag is found.
- */
 function extractBody(html: string): string | null {
   const bodyOpen = html.indexOf("<body");
   if (bodyOpen === -1) return null;
@@ -29,7 +25,6 @@ export interface UseIframeBridgeOptions {
 }
 
 export interface UseIframeBridgeReturn {
-  /** Write HTML to the iframe. When `incremental` is true, only the <body> is patched (no bounce). */
   writeContent: (html: string, incremental?: boolean) => void;
   postToFrame: (message: object, targetOrigin?: string) => void;
   getWindow: () => Window | null;
@@ -46,7 +41,6 @@ export function useIframeBridge(
     onMessageRef.current = onMessage;
   }, [onMessage]);
 
-  // Track whether we've done an initial full write (scripts need to execute once)
   const hasWrittenRef = useRef(false);
 
   const writeContent = useCallback(
@@ -55,8 +49,6 @@ export function useIframeBridge(
       if (!iframe || !html) return;
       const doc = iframe.contentDocument;
 
-      // Incremental update: patch body innerHTML only (avoids full page teardown)
-      // Only works after the initial full write (so scripts have executed once)
       if (incremental && hasWrittenRef.current && doc?.body) {
         const newBody = extractBody(html);
         if (newBody !== null) {
@@ -67,8 +59,6 @@ export function useIframeBridge(
         }
       }
 
-      // Full document write — used for first render and final (non-streaming) writes
-      // so that <script> tags execute properly
       writeDocFull(iframe, html);
       hasWrittenRef.current = true;
     },

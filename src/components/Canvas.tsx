@@ -24,6 +24,7 @@ export function Canvas() {
     removeFrameFromCanvas,
     duplicateFrameById,
     zoomCanvasAtCursorPosition,
+    fitView,
   } = useCanvas();
 
   const persistFramePosition = useCallback(
@@ -56,7 +57,9 @@ export function Canvas() {
     const currentIds = new Set(frames.map((f) => f.id));
     const prevIds = prevFrameIdsRef.current;
     const addedIds = [...currentIds].filter((id) => !prevIds.has(id));
-    if (
+    if (addedIds.length > 1) {
+      fitView(containerRef.current, { top: 80, right: 80, bottom: 80, left: 400 }, 0.6);
+    } else if (
       addedIds.length === 1 &&
       selectedFrameIds[0] === addedIds[0] &&
       prevIds.size > 0
@@ -72,7 +75,7 @@ export function Canvas() {
         );
     }
     prevFrameIdsRef.current = currentIds;
-  }, [frames, selectedFrameIds, persistFramePosition]);
+  }, [frames, selectedFrameIds, persistFramePosition, fitView]);
 
   const handlePositionChange = useCallback(
     (id: string, newLeft: number, newTop: number) => {
@@ -152,14 +155,23 @@ export function Canvas() {
     }
   }, [selectedFrameIds, duplicateFrameById, removeFrameFromCanvas]);
 
-  // Stable per-frame callbacks so Frame memo isn't broken by new arrow fns
-  const positionChangeHandlers = useRef(new Map<string, (l: number, t: number) => void>());
-  const sizeChangeHandlers = useRef(new Map<string, (c: { left?: number; top?: number; width?: number; height?: number }) => void>());
+  const positionChangeHandlers = useRef(
+    new Map<string, (l: number, t: number) => void>(),
+  );
+  const sizeChangeHandlers = useRef(
+    new Map<
+      string,
+      (c: {
+        left?: number;
+        top?: number;
+        width?: number;
+        height?: number;
+      }) => void
+    >(),
+  );
 
-  // Keep handlers in sync with latest frame ids
   useMemo(() => {
     const ids = new Set(frames.map((f) => f.id));
-    // Clean up stale entries
     for (const k of positionChangeHandlers.current.keys()) {
       if (!ids.has(k)) {
         positionChangeHandlers.current.delete(k);
@@ -172,7 +184,8 @@ export function Canvas() {
     (id: string) => {
       let fn = positionChangeHandlers.current.get(id);
       if (!fn) {
-        fn = (newLeft: number, newTop: number) => handlePositionChange(id, newLeft, newTop);
+        fn = (newLeft: number, newTop: number) =>
+          handlePositionChange(id, newLeft, newTop);
         positionChangeHandlers.current.set(id, fn);
       }
       return fn;
@@ -184,8 +197,12 @@ export function Canvas() {
     (id: string) => {
       let fn = sizeChangeHandlers.current.get(id);
       if (!fn) {
-        fn = (changes: { left?: number; top?: number; width?: number; height?: number }) =>
-          updateFrameProperties(id, changes);
+        fn = (changes: {
+          left?: number;
+          top?: number;
+          width?: number;
+          height?: number;
+        }) => updateFrameProperties(id, changes);
         sizeChangeHandlers.current.set(id, fn);
       }
       return fn;

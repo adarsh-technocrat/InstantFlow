@@ -297,7 +297,6 @@ export default function FrameElementToolbar({
     </div>
   );
 
-  // Compute screen position from overlay's bounding rect
   const overlayRect = overlayRef?.current?.getBoundingClientRect();
   const portalTop = overlayRect
     ? overlayRect.top +

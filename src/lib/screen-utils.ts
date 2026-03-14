@@ -39,7 +39,6 @@ const SCREEN_HTML_HEAD = `<!DOCTYPE html>
 
 const SCREEN_HTML_TAIL = `</body></html>`;
 
-/** Short/typo aliases only; other keys get normalized to --key */
 const THEME_KEY_ALIASES: Record<string, string> = {
   r: "--primary",
   y: "--secondary",
@@ -125,7 +124,6 @@ export function injectElementInspectorScript(
   scriptContent: string,
 ): string {
   if (!scriptContent.trim()) return html;
-  // Escape </script> so the HTML parser doesn't close the script tag early
   const escaped = scriptContent.replace(/<\/script\s*>/gi, "<\\/script>");
   const script = `<script>${escaped}</script>`;
   return html.includes("</body>")
@@ -133,31 +131,16 @@ export function injectElementInspectorScript(
     : html + script;
 }
 
-/**
- * Truncate partial/streaming HTML so the browser never sees a half-open tag.
- *
- * During streaming the HTML grows incrementally and may be cut mid-tag:
- *   `<div class="flex ite`          – attribute cut mid-word
- *   `<div class="flex"><sp`         – new tag just started
- *   `<div class="flex">Hello</d`   – closing tag cut
- *
- * This function strips the trailing incomplete tag (if any) so that
- * `doc.write()` only ever receives well-formed-enough HTML that the
- * browser won't render raw source text.
- */
 export function truncatePartialHtml(html: string): string {
   if (!html) return html;
 
-  // Find the last `<` that isn't part of a fully closed tag
   const lastOpen = html.lastIndexOf("<");
-  if (lastOpen === -1) return html; // no tags at all
+  if (lastOpen === -1) return html;
 
   const afterOpen = html.substring(lastOpen);
 
-  // If the tag is fully closed (has a matching '>'), the HTML is fine
   if (afterOpen.includes(">")) return html;
 
-  // Otherwise, chop off the incomplete tag
   return html.substring(0, lastOpen);
 }
 
