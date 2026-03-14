@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useMemo } from "react";
+import { useEffect, useRef, useCallback, useMemo, useState } from "react";
 import { useAppSelector } from "@/store/hooks";
 import { FRAME_WIDTH, FRAME_HEIGHT } from "@/lib/canvas-utils";
 import type { AgentInstance } from "@/store/slices/agentSlice";
@@ -29,7 +29,6 @@ function notifyListeners() {
   for (const l of positionListeners) l();
 }
 
-// Global message listener (installed once)
 let listenerInstalled = false;
 function installGlobalListener() {
   if (listenerInstalled) return;
@@ -43,17 +42,17 @@ function installGlobalListener() {
   });
 }
 
-// ─── Lerp helper for smooth human-like movement ──────────────────────────
-
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
-// ─── Single cursor component (pure DOM) ──────────────────────────────────
+const FADE_OUT_MS = 600;
 
 function AgentCursor({
   agent,
   frames,
+  isFadingOut,
+  onFadeComplete,
 }: {
   agent: AgentInstance;
   frames: Array<{
@@ -64,20 +63,28 @@ function AgentCursor({
     width?: number;
     height?: number;
   }>;
+  isFadingOut?: boolean;
+  onFadeComplete?: () => void;
 }) {
   const elRef = useRef<HTMLDivElement>(null);
-  // Current animated position
+
+  useEffect(() => {
+    if (!isFadingOut) return;
+    const el = elRef.current;
+    if (el) {
+      el.style.transition = `opacity ${FADE_OUT_MS}ms ease-out`;
+      el.style.opacity = "0";
+    }
+    const timer = setTimeout(() => onFadeComplete?.(), FADE_OUT_MS);
+    return () => clearTimeout(timer);
+  }, [isFadingOut, onFadeComplete]);
+
   const currentPos = useRef({ x: 0, y: 0 });
-  // Target position to animate towards
   const targetPos = useRef({ x: 0, y: 0 });
-  // Whether we've set an initial position yet
   const hasInitialized = useRef(false);
-  // rAF handle
   const rafRef = useRef<number>(0);
-  // Last valid position (so cursor doesn't jump to 0,0)
   const lastValidPos = useRef<{ x: number; y: number } | null>(null);
 
-  // Compute target position from frame + element rect
   const computeTarget = useCallback(() => {
     const frame = frames.find((f) => f.id === agent.activeFrameId);
     if (!frame) return lastValidPos.current;
@@ -99,13 +106,11 @@ function AgentCursor({
 
     if (lastValidPos.current) return lastValidPos.current;
 
-    // Fallback: center-top of frame
     const fallback = { x: frame.left + frameW * 0.5, y: frame.top + 80 };
     lastValidPos.current = fallback;
     return fallback;
   }, [agent.activeFrameId, frames]);
 
-  // Animation loop — lerp towards target for smooth organic movement
   useEffect(() => {
     let running = true;
     let lastTime = 0;
@@ -122,7 +127,6 @@ function AgentCursor({
         return;
       }
 
-      // Smooth factor: higher = snappier. ~4-6 feels human-like.
       const speed = 4.5;
       const t = 1 - Math.exp(-speed * dt);
 
@@ -134,7 +138,6 @@ function AgentCursor({
       const dx = Math.abs(tx - cx);
       const dy = Math.abs(ty - cy);
 
-      // Skip lerp if close enough (< 0.5px)
       if (dx < 0.5 && dy < 0.5) {
         currentPos.current.x = tx;
         currentPos.current.y = ty;
@@ -156,14 +159,12 @@ function AgentCursor({
     };
   }, []);
 
-  // Listen to cursor position updates and recompute target (pure DOM, no state)
   useEffect(() => {
     const update = () => {
       const pos = computeTarget();
       if (!pos) return;
 
       if (!hasInitialized.current) {
-        // Snap to initial position (no animation on first placement)
         hasInitialized.current = true;
         currentPos.current = { ...pos };
         targetPos.current = { ...pos };
@@ -176,14 +177,11 @@ function AgentCursor({
       }
     };
 
-    // Compute immediately
     update();
 
-    // Subscribe to iframe position updates
     return subscribeToCursorPositions(update);
   }, [computeTarget]);
 
-  // Also recompute when activeFrameId changes (agent moved to new frame)
   useEffect(() => {
     const pos = computeTarget();
     if (pos) {
@@ -199,7 +197,6 @@ function AgentCursor({
         willChange: "transform",
       }}
     >
-      {/* Cursor arrow */}
       <svg
         width="24"
         height="30"
@@ -217,7 +214,6 @@ function AgentCursor({
         />
       </svg>
 
-      {/* Name label */}
       <div
         className="ml-4 -mt-0.5 flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold text-white shadow-lg"
         style={{ backgroundColor: agent.color }}
@@ -227,8 +223,6 @@ function AgentCursor({
     </div>
   );
 }
-
-// ─── Main component ──────────────────────────────────────────────────────
 
 const SINGLE_AGENT_VIRTUAL_ID = "main";
 
@@ -240,47 +234,96 @@ export function AgentCursors() {
   );
   const mainChatStatus = useAppSelector((s) => s.agent.mainChatStatus);
 
-  // Install the global postMessage listener once
+  const [fadingAgents, setFadingAgents] = useState<Map<string, AgentInstance>>(
+    new Map(),
+  );
+  const prevVisibleRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     installGlobalListener();
   }, []);
 
-  const visibleAgents = useMemo(() => {
+  const activeAgents = useMemo(() => {
     const fromStore = agents.filter(
       (a) => a.status === "working" && a.activeFrameId,
     );
-    if (fromStore.length > 0) return fromStore;
-    if (
-      agents.length === 0 &&
-      mainChatStatus === "working" &&
-      mainChatActiveFrameId
-    ) {
+    const result = [...fromStore];
+    if (mainChatStatus === "working" && mainChatActiveFrameId) {
       const persona = AGENT_PERSONAS[0];
-      return [
-        {
-          id: SINGLE_AGENT_VIRTUAL_ID,
-          name: persona.name,
-          emoji: persona.emoji,
-          color: persona.color,
-          subTask: "",
-          assignedScreens: [],
-          screenPositions: [],
-          status: "working" as const,
-          chatId: "main",
-          activeFrameId: mainChatActiveFrameId,
-          cursorProgress: 0,
-        } as AgentInstance,
-      ];
+      result.push({
+        id: SINGLE_AGENT_VIRTUAL_ID,
+        name: persona.name,
+        emoji: persona.emoji,
+        color: persona.color,
+        subTask: "",
+        assignedScreens: [],
+        assignedFrameIds: [],
+        screenPositions: [],
+        status: "working" as const,
+        chatId: "main",
+        activeFrameId: mainChatActiveFrameId,
+        cursorProgress: 0,
+      } as AgentInstance);
     }
-    return [];
+    return result;
   }, [agents, mainChatStatus, mainChatActiveFrameId]);
 
-  if (visibleAgents.length === 0) return null;
+  useEffect(() => {
+    const currentIds = new Set(activeAgents.map((a) => a.id));
+    const prevIds = prevVisibleRef.current;
+
+    for (const prevId of prevIds) {
+      if (!currentIds.has(prevId) && !fadingAgents.has(prevId)) {
+        const snapshot =
+          agents.find((a) => a.id === prevId) ??
+          (prevId === SINGLE_AGENT_VIRTUAL_ID
+            ? ({
+                id: SINGLE_AGENT_VIRTUAL_ID,
+                name: AGENT_PERSONAS[0].name,
+                emoji: AGENT_PERSONAS[0].emoji,
+                color: AGENT_PERSONAS[0].color,
+                subTask: "",
+                assignedScreens: [],
+                assignedFrameIds: [],
+                screenPositions: [],
+                status: "done" as const,
+                chatId: "main",
+                activeFrameId: mainChatActiveFrameId,
+                cursorProgress: 0,
+              } as AgentInstance)
+            : null);
+        if (snapshot?.activeFrameId) {
+          setFadingAgents((prev) => new Map(prev).set(prevId, snapshot));
+        }
+      }
+    }
+
+    prevVisibleRef.current = currentIds;
+  }, [activeAgents, agents, fadingAgents, mainChatActiveFrameId]);
+
+  const handleFadeComplete = useCallback((agentId: string) => {
+    setFadingAgents((prev) => {
+      const next = new Map(prev);
+      next.delete(agentId);
+      return next;
+    });
+  }, []);
+
+  if (activeAgents.length === 0 && fadingAgents.size === 0) return null;
 
   return (
     <>
-      {visibleAgents.map((agent) => (
+      {activeAgents.map((agent) => (
         <AgentCursor key={agent.id} agent={agent} frames={frames} />
+      ))}
+      {Array.from(fadingAgents.values()).map((agent) => (
+        <AgentCursor
+          key={`fade-${agent.id}`}
+          agent={agent}
+          frames={frames}
+          isFadingOut
+          onFadeComplete={() => handleFadeComplete(agent.id)}
+        />
       ))}
     </>
   );

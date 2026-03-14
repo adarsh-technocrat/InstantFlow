@@ -105,26 +105,27 @@ function getToolDisplayLabel(
     return isCalled ? "Created theme" : "Creating theme…";
   if (toolType === "update_theme")
     return isCalled ? "Updated theme" : "Updating theme…";
-  if (toolType === "create_screen" && input?.name) {
-    return isCalled
-      ? `Created ${toTitle(input.name)} screen`
-      : `Creating ${toTitle(input.name)} screen…`;
+  if (toolType === "create_all_screens") {
+    return isCalled ? "Created all screens" : "Creating all screens…";
   }
   if (
     input?.id &&
     (toolType === "read_screen" ||
       toolType === "update_screen" ||
-      toolType === "edit_screen")
+      toolType === "edit_design" ||
+      toolType === "design_screen")
   ) {
     const frame = frames.find((f) => f.id === input.id);
     const label = frame?.label ?? "Screen";
     const name = toTitle(label);
     if (toolType === "read_screen")
       return isCalled ? `Read ${name} screen` : `Reading ${name} screen…`;
-    if (toolType === "edit_screen")
+    if (toolType === "edit_design")
       return isCalled ? `Edited ${name} screen` : `Editing ${name} screen…`;
     if (toolType === "update_screen")
       return isCalled ? `Updated ${name} screen` : `Updating ${name} screen…`;
+    if (toolType === "design_screen")
+      return isCalled ? `Designed ${name} screen` : `Designing ${name} screen…`;
   }
   const base = toTitle(toolType.replace(/_/g, " "));
   return isCalled ? base : `${base}…`;
@@ -462,6 +463,7 @@ export function AgentChatInstance({
             agentName: agent.name,
             subTask: agent.subTask,
             assignedScreens: agent.assignedScreens,
+            assignedFrameIds: agent.assignedFrameIds,
             screenPositions: agent.screenPositions,
             isFirstAgent,
             planContext,
@@ -606,54 +608,25 @@ export function AgentChatInstance({
             state: "running",
           }),
         );
-        if (data.toolName === "create_screen" && data.frame) {
-          dispatch(
-            addFrameWithId({
-              id: data.frame.id,
-              label: data.frame.label ?? "",
-              left: data.frame.left ?? 0,
-              top: data.frame.top ?? 0,
-              html: data.frame.html ?? "",
-            }),
-          );
-          // Move cursor to this frame
-          dispatch(
-            updateAgentActiveFrame({
-              id: agent.id,
-              frameId: data.frame.id,
-            }),
-          );
-        }
         return;
       }
 
       if (ev.type === "data-tool-call-delta") {
-        if (data.toolName === "create_screen" && data.frame) {
-          // Throttle HTML updates during streaming deltas
-          if (data.frame.html !== undefined) {
-            enqueueHtmlUpdate(data.frame.id, data.frame.html);
-          }
-          // Label updates are infrequent, dispatch immediately
-          if (data.frame.label !== undefined) {
-            dispatch(
-              updateFrame({
-                id: data.frame.id,
-                changes: { label: data.frame.label },
-              }),
-            );
-            setToolSteps((prev) =>
-              prev.map((s) =>
-                s.toolCallId === data.toolCallId
-                  ? { ...s, input: { ...s.input, name: data.frame!.label } }
-                  : s,
-              ),
-            );
-          }
-        } else if (
-          data.toolName === "update_screen" &&
+        if (
+          (data.toolName === "design_screen" ||
+            data.toolName === "update_screen") &&
           data.frame?.html !== undefined
         ) {
           enqueueHtmlUpdate(data.frame.id, data.frame.html);
+          // Move cursor to the frame being designed
+          if (data.toolName === "design_screen") {
+            dispatch(
+              updateAgentActiveFrame({
+                id: agent.id,
+                frameId: data.frame.id,
+              }),
+            );
+          }
         }
         return;
       }
@@ -675,45 +648,10 @@ export function AgentChatInstance({
               : s,
           ),
         );
-        if (data.toolName === "create_screen" && data.frame) {
-          dispatch(
-            addFrameWithId({
-              id: data.frame.id,
-              label: data.frame.label ?? "",
-              left: data.frame.left ?? 0,
-              top: data.frame.top ?? 0,
-              html: data.frame.html ?? "",
-            }),
-          );
-          dispatch(
-            updateFrame({
-              id: data.frame.id,
-              changes: {
-                label: data.frame.label,
-                html: data.frame.html,
-                ...(data.frame.left !== undefined && {
-                  left: data.frame.left,
-                }),
-                ...(data.frame.top !== undefined && { top: data.frame.top }),
-              },
-            }),
-          );
-          if (data.frame.html && data.frame.html.length > 0) {
-            fetch("/api/frames", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                frameId: data.frame.id,
-                html: data.frame.html,
-                label: data.frame.label,
-                left: data.frame.left,
-                top: data.frame.top,
-              }),
-            }).catch(() => {});
-          }
-        } else if (
+        if (
           (data.toolName === "update_screen" ||
-            data.toolName === "edit_screen") &&
+            data.toolName === "edit_design" ||
+            data.toolName === "design_screen") &&
           data.frame?.html !== undefined
         ) {
           dispatch(
@@ -810,16 +748,24 @@ export function AgentChatInstance({
     if (hasHydrated.current) return;
     hasHydrated.current = true;
 
-    console.log(`[Agent ${agent.name}] mount — chatId=${agent.chatId}, subTask="${agent.subTask.slice(0, 60)}…"`);
+    console.log(
+      `[Agent ${agent.name}] mount — chatId=${agent.chatId}, subTask="${agent.subTask.slice(0, 60)}…"`,
+    );
 
     const agentKey = agent.chatId;
     fetch(`/api/chat/sessions?agentId=${encodeURIComponent(agentKey)}`)
       .then((res) => res.json())
       .then((data: { messages?: typeof messages }) => {
-        console.log(`[Agent ${agent.name}] session fetch result:`, data?.messages?.length ?? 0, "messages");
+        console.log(
+          `[Agent ${agent.name}] session fetch result:`,
+          data?.messages?.length ?? 0,
+          "messages",
+        );
         if (data?.messages && data.messages.length > 0) {
           // Agent already has persisted history — restore it, skip auto-send
-          console.log(`[Agent ${agent.name}] restoring persisted history, marking done`);
+          console.log(
+            `[Agent ${agent.name}] restoring persisted history, marking done`,
+          );
           setMessages(data.messages);
           // Restore tool steps from the last assistant message parts
           const lastAssistant = [...data.messages]
@@ -838,7 +784,9 @@ export function AgentChatInstance({
         } else {
           // No persisted history — auto-send the sub-task (staggered)
           const delay = parseInt(agent.id) * 500;
-          console.log(`[Agent ${agent.name}] no history — will auto-send in ${delay}ms`);
+          console.log(
+            `[Agent ${agent.name}] no history — will auto-send in ${delay}ms`,
+          );
           const timer = setTimeout(() => {
             console.log(`[Agent ${agent.name}] AUTO-SENDING sub-task now`);
             dispatch(updateAgentStatus({ id: agent.id, status: "working" }));
@@ -849,10 +797,15 @@ export function AgentChatInstance({
       })
       .catch((err) => {
         // On fetch error, fall back to auto-send
-        console.warn(`[Agent ${agent.name}] session fetch error, falling back to auto-send`, err);
+        console.warn(
+          `[Agent ${agent.name}] session fetch error, falling back to auto-send`,
+          err,
+        );
         const delay = parseInt(agent.id) * 500;
         const timer = setTimeout(() => {
-          console.log(`[Agent ${agent.name}] AUTO-SENDING (fallback) sub-task now`);
+          console.log(
+            `[Agent ${agent.name}] AUTO-SENDING (fallback) sub-task now`,
+          );
           dispatch(updateAgentStatus({ id: agent.id, status: "working" }));
           sendMessageRef.current({ text: agent.subTask });
         }, delay);

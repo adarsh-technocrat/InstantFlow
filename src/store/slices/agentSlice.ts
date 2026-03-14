@@ -8,6 +8,7 @@ export interface AgentInstance {
   color: string;
   subTask: string;
   assignedScreens: string[];
+  assignedFrameIds: string[];
   screenPositions: Array<{ left: number; top: number }>;
   status: "idle" | "working" | "done" | "error";
   chatId: string;
@@ -15,7 +16,6 @@ export interface AgentInstance {
   cursorProgress: number;
 }
 
-/** Single-agent (main chat) frame context for shutter + cursor when no orchestration. */
 export type MainChatAgentStatus = "idle" | "working";
 
 interface AgentState {
@@ -51,6 +51,7 @@ const agentSlice = createSlice({
           id: string;
           subTask: string;
           assignedScreens: string[];
+          assignedFrameIds?: string[];
           screenPositions?: Array<{ left: number; top: number }>;
         }>;
         keepOrchestratorActive?: boolean;
@@ -59,10 +60,12 @@ const agentSlice = createSlice({
       const { orchestrationId, assignments, keepOrchestratorActive } =
         action.payload;
       state.orchestrationId = orchestrationId;
-      state.mainChatActiveFrameId = null;
-      state.mainChatStatus = "idle";
+      if (!keepOrchestratorActive) {
+        state.mainChatActiveFrameId = null;
+        state.mainChatStatus = "idle";
+      }
       state.agents = assignments.map((a, i) => {
-        const persona = AGENT_PERSONAS[i % AGENT_PERSONAS.length];
+        const persona = AGENT_PERSONAS[(i + 1) % AGENT_PERSONAS.length];
         return {
           id: a.id,
           name: persona.name,
@@ -70,6 +73,7 @@ const agentSlice = createSlice({
           color: persona.color,
           subTask: a.subTask,
           assignedScreens: a.assignedScreens,
+          assignedFrameIds: a.assignedFrameIds ?? [],
           screenPositions: a.screenPositions ?? [],
           status: "idle" as const,
           chatId: `orch-${orchestrationId}-${persona.name.toLowerCase()}`,

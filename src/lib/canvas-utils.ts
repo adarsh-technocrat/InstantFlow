@@ -1,5 +1,7 @@
 export const FRAME_WIDTH = 430;
 export const FRAME_HEIGHT = 932;
+export const FRAME_GAP = 28;
+export const FRAME_STEP = FRAME_WIDTH + FRAME_GAP;
 
 export function convertClientPointToContentPoint(
   clientX: number,

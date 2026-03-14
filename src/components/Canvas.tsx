@@ -62,7 +62,7 @@ export function Canvas() {
       prevIds.size > 0
     ) {
       const frame = frames.find((f) => f.id === addedIds[0]);
-      if (frame)
+      if (frame && frame.html && frame.html.length > 0)
         persistFramePosition(
           frame.id,
           frame.label,

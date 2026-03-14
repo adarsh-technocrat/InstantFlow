@@ -20,7 +20,6 @@ import { runPlanningPipeline } from "@/lib/agent/planner";
 export const runtime = "nodejs";
 
 const CHAT_MODEL_ID = process.env.CHAT_MODEL_ID ?? "gemini-2.5-pro";
-// Design model used only for create_screen, edit_screen, and theme flows (better at UI design).
 const DESIGN_MODEL_ID = process.env.DESIGN_MODEL_ID ?? "gemini-3-pro-preview";
 
 const vertex = createVertex({
@@ -75,7 +74,6 @@ export async function POST(req: Request) {
     const initialFrames = Array.isArray(body?.frames) ? body.frames : [];
     const initialTheme = (body?.theme ?? {}) as ThemeVariables;
 
-    // Multi-agent metadata (optional)
     const agentId = body?.agentId as string | undefined;
     const agentName = body?.agentName as string | undefined;
     const subTask = body?.subTask as string | undefined;
@@ -84,6 +82,7 @@ export async function POST(req: Request) {
       left: number;
       top: number;
     }>;
+    const assignedFrameIds = (body?.assignedFrameIds ?? []) as string[];
     const isFirstAgent = body?.isFirstAgent as boolean | undefined;
     const agentPlanContext = body?.planContext as string | undefined;
     const agentCount = typeof body?.agentCount === "number" ? body.agentCount : 1;
@@ -107,13 +106,9 @@ export async function POST(req: Request) {
       execute: async ({ writer }) => {
         const messageId = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
 
-        // Emit start immediately so the client creates the assistant message
-        // before any planning or tool events arrive.
         writer.write({ type: "start", messageId });
         writer.write({ type: "start-step" });
 
-        // 1. Planning pipeline (if initial request) — emits data events into the already-started message
-        //    Skip if agent already has planContext (multi-agent mode — planning ran in orchestration)
         let planContext = "";
         if (agentPlanContext) {
           planContext = agentPlanContext;
@@ -127,9 +122,6 @@ export async function POST(req: Request) {
           planContext = planning.planContext;
         }
 
-        // When !agentId (main/orchestrator chat), include spawn_agents tool so the model
-        // can start multiple agents via tool call; the current chat stays visible.
-        // 2. Create tools: agent uses CHAT_MODEL; design model used inside create_screen, etc.
         const tools = createTools({
           frames,
           theme,
@@ -137,22 +129,22 @@ export async function POST(req: Request) {
           designModel: { vertex, modelId: DESIGN_MODEL_ID },
           screenPositions: screenPositions.length > 0 ? screenPositions : undefined,
           allowSpawnAgents: !agentId,
+          excludeCreateScreen: !!agentId,
         });
 
-        // 3. Build system prompt (with optional agent scope for multi-agent)
         let agentScope = "";
         if (agentId && agentName && subTask) {
           agentScope = buildAgentScope({
             name: agentName,
             subTask,
             assignedScreens,
+            assignedFrameIds,
             screenPositions,
             isFirstAgent: isFirstAgent ?? false,
           });
         }
         const system = getSystemPrompt(frames, theme, planContext, agentScope, agentCount);
 
-        // 4. Prepare messages
         const modelMessages =
           rawMessages.length > 0 && rawMessages.some(hasParts)
             ? await convertToModelMessages(rawMessages, { tools })
@@ -192,10 +184,8 @@ export async function POST(req: Request) {
               ]
             : validMessages;
 
-        // 5. Strip base64 images from history to avoid Gemini payload limits
         const sanitizedMessages = stripBase64FromMessages(messagesToSend);
 
-        // 6. Run agentic streamText — main agent always uses CHAT_MODEL; design tools use DESIGN_MODEL internally
         const result = streamText({
           model: vertex(CHAT_MODEL_ID),
           system,
@@ -207,12 +197,10 @@ export async function POST(req: Request) {
             typeof streamText
           >[0]["providerOptions"],
         });
-        // 7. Forward streamText UI stream, skipping 'start' (already emitted above)
         const uiStream = result.toUIMessageStream();
         let skippedFirstStart = false;
         let skippedFirstStep = false;
         let stepCount = 0;
-        // Gemini 2.5 can emit duplicate tool-input-start / tool-output-available per toolCallId; dedupe so UI gets one per call.
         const seenToolInputStart = new Set<string>();
         const seenToolOutputAvailable = new Set<string>();
         const filteredStream = uiStream.pipeThrough(
@@ -220,7 +208,6 @@ export async function POST(req: Request) {
             transform(chunk, controller) {
               const c = chunk as { type?: string; toolCallId?: string };
               const type = c.type;
-              // Skip the first start & start-step since we already emitted them
               if (type === "start" && !skippedFirstStart) {
                 skippedFirstStart = true;
                 return;
@@ -232,7 +219,6 @@ export async function POST(req: Request) {
                 }
                 stepCount++;
               }
-              // Only forward reasoning on step 0 (optional: model may or may not send reasoning-*)
               if (
                 stepCount > 0 &&
                 (type === "reasoning-start" ||
@@ -241,7 +227,6 @@ export async function POST(req: Request) {
               ) {
                 return;
               }
-              // Dedupe: one tool-input-start and one tool-output-available per toolCallId (Gemini 2.5 sends duplicates)
               if (type === "tool-input-start" && c.toolCallId) {
                 if (seenToolInputStart.has(c.toolCallId)) return;
                 seenToolInputStart.add(c.toolCallId);

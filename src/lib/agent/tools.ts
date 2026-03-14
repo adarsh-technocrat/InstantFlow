@@ -1,14 +1,8 @@
-/**
- * Tool definitions for the Sleek design agent.
- * Factory function creates tools with closures over mutable state.
- * When designModel is set, create_screen, edit_screen, build_theme, and update_theme
- * delegate content generation to that model (e.g. gemini-3-pro-preview).
- */
-
 import { tool, generateText, generateObject, streamText } from "ai";
 import type { UIMessageStreamWriter } from "ai";
 import type { GoogleVertexProvider } from "@ai-sdk/google-vertex";
 import { z } from "zod";
+import { FRAME_STEP } from "@/lib/canvas-utils";
 import {
   wrapScreenBody,
   extractBodyContent,
@@ -16,11 +10,7 @@ import {
   truncatePartialHtml,
   type ThemeVariables,
 } from "@/lib/screen-utils";
-import {
-  parseCreateScreenPartial,
-  type CreateScreenStreamState,
-  type UpdateScreenStreamState,
-} from "./stream-helpers";
+import { type UpdateScreenStreamState } from "./stream-helpers";
 
 export interface FrameState {
   id: string;
@@ -34,15 +24,13 @@ export interface ToolContext {
   frames: FrameState[];
   theme: ThemeVariables;
   writer?: UIMessageStreamWriter;
-  /** When set, create_screen / edit_screen / build_theme / update_theme use this model for content generation. */
   designModel?: {
     vertex: GoogleVertexProvider;
     modelId: string;
   };
-  /** Pre-assigned screen positions from orchestration (one per screen, in order). */
   screenPositions?: Array<{ left: number; top: number }>;
-  /** When true, the orchestrator can spawn multiple agents via spawn_agents tool (main chat only). */
   allowSpawnAgents?: boolean;
+  excludeCreateScreen?: boolean;
 }
 
 function stripHtmlMarkdown(raw: string): string {
@@ -53,7 +41,6 @@ function stripHtmlMarkdown(raw: string): string {
     .trim();
 }
 
-/** Generate inner body HTML using the design model. Returns null on failure. */
 async function generateScreenHtmlWithDesignModel(
   vertex: GoogleVertexProvider,
   modelId: string,
@@ -74,7 +61,6 @@ async function generateScreenHtmlWithDesignModel(
   }
 }
 
-/** Strip leading markdown code fence (```html) that models sometimes emit. */
 function stripLeadingMarkdownFence(raw: string): string {
   return raw.replace(/^```(?:html)?\s*/i, "");
 }
@@ -108,7 +94,6 @@ async function streamScreenHtmlWithDesignModel(
   }
 }
 
-/** Generate theme variables (flat --key -> value) using the design model. */
 const THEME_KEYS =
   "--background, --foreground, --primary, --primary-foreground, --secondary, --secondary-foreground, --muted, --muted-foreground, --card, --card-foreground, --border, --radius, --font-sans, --font-heading";
 
@@ -130,9 +115,6 @@ async function generateThemeWithDesignModel(
   }
 }
 
-const FRAME_SPACING = 420;
-const STREAM_THROTTLE_MS = 120;
-
 const DESIGN_MODEL_PROVIDER_OPTIONS = {
   google: {
     thinkingConfig: {
@@ -142,27 +124,76 @@ const DESIGN_MODEL_PROVIDER_OPTIONS = {
   },
 } as const;
 
-const FRAME_W = 393;
-const FRAME_GAP = 40;
-const FRAME_STEP = FRAME_W + FRAME_GAP;
-
 export function createTools(ctx: ToolContext) {
   const {
     frames,
     theme,
     writer,
     designModel,
-    screenPositions,
     allowSpawnAgents,
+    excludeCreateScreen,
   } = ctx;
 
-  let nextScreenPositionIndex = 0;
-
-  const createScreenStreamState = new Map<string, CreateScreenStreamState>();
   const updateScreenStreamState = new Map<string, UpdateScreenStreamState>();
   const editScreenStreamBuffer = new Map<string, string>();
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const screenCreationTools: Record<string, any> = excludeCreateScreen
+    ? {}
+    : {
+        create_all_screens: tool({
+          description:
+            "Creates multiple placeholder screens on the canvas at once. Use this in multi-agent mode to create all frames before spawning agents. Returns frame IDs for each screen.",
+          inputSchema: z.object({
+            screens: z
+              .array(
+                z.object({
+                  name: z.string().describe("Screen label/name"),
+                  description: z
+                    .string()
+                    .describe("Brief description of the screen"),
+                }),
+              )
+              .min(1)
+              .max(12),
+          }),
+          onInputStart: ({ toolCallId }) => {
+            writer?.write({
+              type: "tool-input-start",
+              toolCallId,
+              toolName: "create_all_screens",
+            });
+          },
+          execute: async (
+            {
+              screens,
+            }: { screens: Array<{ name: string; description: string }> },
+            { toolCallId },
+          ) => {
+            const startIndex = frames.length;
+            const results = screens.map((screen, i) => {
+              const id = `${toolCallId}-${i}`;
+              const left = (startIndex + i) * FRAME_STEP;
+              const top = 0;
+              frames.push({ id, label: screen.name, left, top, html: "" });
+              writer?.write({
+                type: "data-tool-call-end",
+                data: {
+                  toolCallId: id,
+                  toolName: "create_all_screens",
+                  frame: { id, label: screen.name, left, top, html: "" },
+                },
+              } as Parameters<typeof writer.write>[0]);
+              return { name: screen.name, frameId: id, left, top };
+            });
+            return { success: true, screens: results };
+          },
+        }),
+      };
+
   return {
+    ...screenCreationTools,
+
     read_screen: tool({
       description:
         "Returns the current HTML of a screen. Call this before editing. id must be from the Current Screens table in the system context.",
@@ -199,136 +230,39 @@ export function createTools(ctx: ToolContext) {
       },
     }),
 
-    create_screen: tool({
+    design_screen: tool({
       description:
-        "Creates a new screen at an optional canvas position (left, top in pixels). The design model generates the HTML from the screen name and description (e.g. from the plan).",
+        "Generates the full design for an existing screen frame. Use this to design screens created by create_all_screens. The design model generates the HTML from the description. Streams the design live into the frame.",
       inputSchema: z.object({
-        name: z.string().describe("Screen label/name"),
+        id: z.string().describe("Frame id (from create_all_screens result)"),
         description: z
           .string()
           .describe(
-            "Description of the screen content and layout (e.g. from the plan).",
-          ),
-        left: z
-          .number()
-          .optional()
-          .describe(
-            "X position on the canvas in pixels. Use when you know where the frame should be placed.",
-          ),
-        top: z
-          .number()
-          .optional()
-          .describe(
-            "Y position on the canvas in pixels. Use when you know where the frame should be placed.",
+            "Full description of the screen content and layout to generate.",
           ),
       }),
       onInputStart: ({ toolCallId }) => {
         writer?.write({
           type: "tool-input-start",
           toolCallId,
-          toolName: "create_screen",
+          toolName: "design_screen",
         });
-        createScreenStreamState.set(toolCallId, {
-          buffer: "",
-          lastEmit: 0,
-        });
-        // Use pre-assigned position if available, otherwise fall back to sequential placement
-        const preAssigned =
-          screenPositions && nextScreenPositionIndex < screenPositions.length
-            ? screenPositions[nextScreenPositionIndex++]
-            : null;
-        const lastFrame = frames[frames.length - 1];
-        const left = preAssigned
-          ? preAssigned.left
-          : lastFrame
-            ? lastFrame.left + FRAME_SPACING
-            : 0;
-        const top = preAssigned
-          ? preAssigned.top
-          : lastFrame
-            ? lastFrame.top
-            : 0;
-        const frameId = toolCallId;
-        frames.push({
-          id: frameId,
-          label: "Loading…",
-          left,
-          top,
-          html: "",
-        });
-        // Emit so the client adds the frame on canvas immediately; stream will update it live.
-        writer?.write({
-          type: "data-tool-call-start",
-          data: {
-            toolCallId,
-            toolName: "create_screen",
-            frame: {
-              id: frameId,
-              label: "Loading…",
-              left,
-              top,
-              html: "",
-            },
-          },
-        });
-      },
-      onInputDelta: ({ toolCallId, inputTextDelta }) => {
-        const state = createScreenStreamState.get(toolCallId);
-        if (!state) return;
-        state.buffer += inputTextDelta;
-        const now = Date.now();
-        if (now - state.lastEmit < STREAM_THROTTLE_MS) return;
-        const frame = frames.find((f) => f.id === toolCallId);
-        if (!frame) return;
-        const parsed = parseCreateScreenPartial(state.buffer);
-        if (parsed?.name && parsed.name !== frame.label) {
-          frame.label = parsed.name;
-          state.lastEmit = now;
-        }
-        if (
-          parsed?.left !== undefined &&
-          parsed?.top !== undefined &&
-          (parsed.left !== frame.left || parsed.top !== frame.top)
-        ) {
-          frame.left = parsed.left;
-          frame.top = parsed.top;
-          state.lastEmit = now;
-          writer?.write({
-            type: "data-tool-call-delta",
-            data: {
-              toolCallId,
-              toolName: "create_screen",
-              frame: {
-                id: toolCallId,
-                label: frame.label,
-                left: frame.left,
-                top: frame.top,
-              },
-            },
-          });
-        }
       },
       execute: async (
-        {
-          name,
-          description,
-          left: argLeft,
-          top: argTop,
-        }: {
-          name: string;
-          description: string;
-          left?: number;
-          top?: number;
-        },
+        { id, description }: { id: string; description: string },
         { toolCallId },
       ) => {
+        const frame = frames.find((f) => f.id === id);
+        if (!frame) {
+          return { success: false, error: "Frame not found" };
+        }
         if (!designModel?.vertex || !designModel?.modelId) {
           return {
             success: false,
-            error: "Design model is required for create_screen.",
+            error: "Design model is required for design_screen.",
           };
         }
-        const designPrompt = `You are a mobile UI designer. Generate the inner body HTML (no html/head/body tags) for a screen named "${name}".\n\nDescription: ${description}\n\nUse Tailwind classes and iconify-icon where needed. Output only the complete inner body HTML, no markdown or explanation.`;
+        const designPrompt = `You are a mobile UI designer. Generate the inner body HTML (no html/head/body tags) for a screen named "${frame.label}".\n\nDescription: ${description}\n\nUse Tailwind classes and iconify-icon where needed. Output only the complete inner body HTML, no markdown or explanation.`;
         const generated = await streamScreenHtmlWithDesignModel(
           designModel.vertex,
           designModel.modelId,
@@ -339,14 +273,8 @@ export function createTools(ctx: ToolContext) {
               type: "data-tool-call-delta",
               data: {
                 toolCallId,
-                toolName: "create_screen",
-                frame: {
-                  id: toolCallId,
-                  label: name,
-                  left: frames.find((f) => f.id === toolCallId)?.left ?? 0,
-                  top: frames.find((f) => f.id === toolCallId)?.top ?? 0,
-                  html: wrapped,
-                },
+                toolName: "design_screen",
+                frame: { id: frame.id, html: wrapped },
               },
             });
           },
@@ -359,66 +287,32 @@ export function createTools(ctx: ToolContext) {
             error: "Design model did not return HTML. Try again.",
           };
         }
-        const wrappedHtml = wrapScreenBody(finalHtml, theme);
-        const frame = frames.find((f) => f.id === toolCallId);
-        if (frame) {
-          frame.label = name;
-          frame.html = wrappedHtml;
-          if (argLeft !== undefined && argTop !== undefined) {
-            frame.left = argLeft;
-            frame.top = argTop;
-          }
-        } else {
-          const lastFrame = frames[frames.length - 1];
-          const left =
-            argLeft !== undefined && argTop !== undefined
-              ? argLeft
-              : lastFrame
-                ? lastFrame.left + FRAME_SPACING
-                : 0;
-          const top =
-            argTop !== undefined ? argTop : lastFrame ? lastFrame.top : 0;
-          frames.push({
-            id: toolCallId,
-            label: name,
-            left,
-            top,
-            html: wrappedHtml,
-          });
-        }
-        createScreenStreamState.delete(toolCallId);
-        const frameRecord = frames.find((f) => f.id === toolCallId);
+        frame.html = wrapScreenBody(finalHtml, theme);
         const result = {
           success: true,
-          id: toolCallId,
-          message: `Created screen "${name}"`,
-          frame: frameRecord
-            ? {
-                id: frameRecord.id,
-                label: frameRecord.label,
-                left: frameRecord.left,
-                top: frameRecord.top,
-                html: frameRecord.html,
-              }
-            : undefined,
+          frame: {
+            id: frame.id,
+            label: frame.label,
+            left: frame.left,
+            top: frame.top,
+            html: frame.html,
+          },
         };
-        if (result.frame) {
-          writer?.write({
-            type: "data-tool-call-end",
-            data: {
-              toolCallId,
-              toolName: "create_screen",
-              frame: result.frame,
-            },
-          });
-        }
+        writer?.write({
+          type: "data-tool-call-end",
+          data: {
+            toolCallId,
+            toolName: "design_screen",
+            frame: result.frame,
+          },
+        });
         return result;
       },
     }),
 
     update_screen: tool({
       description:
-        "Replaces the ENTIRE screen body based on a description of the changes. Use only for broad layout redesigns. Do NOT use for small targeted edits (use edit_screen instead). The design model generates the new HTML from the current screen and your description.",
+        "Replaces the ENTIRE screen body based on a description of the changes. Use only for broad layout redesigns on screens that already have content. Do NOT use for small targeted edits (use edit_design instead). The design model generates the new HTML from the current screen and your description.",
       inputSchema: z.object({
         id: z.string().describe("Frame id"),
         description: z
@@ -442,7 +336,7 @@ export function createTools(ctx: ToolContext) {
       ) => {
         updateScreenStreamState.delete(toolCallId);
         const frame = frames.find((f) => f.id === id);
-        if (!frame?.html) {
+        if (!frame) {
           return { success: false, error: "Screen not found" };
         }
         if (!designModel?.vertex || !designModel?.modelId) {
@@ -451,8 +345,10 @@ export function createTools(ctx: ToolContext) {
             error: "Design model is required for update_screen.",
           };
         }
-        const currentBody = extractBodyContent(frame.html);
-        const designPrompt = `You are a mobile UI designer. Update this screen's inner body HTML according to the description below. Output the complete updated inner body HTML only, no markdown or explanation.\n\nDescription of changes: ${description}\n\nCurrent inner body HTML:\n${currentBody}`;
+        const currentBody = frame.html ? extractBodyContent(frame.html) : "";
+        const designPrompt = currentBody
+          ? `You are a mobile UI designer. Update this screen's inner body HTML according to the description below. Output the complete updated inner body HTML only, no markdown or explanation.\n\nDescription of changes: ${description}\n\nCurrent inner body HTML:\n${currentBody}`
+          : `You are a mobile UI designer. Generate the inner body HTML (no html/head/body tags) for a screen named "${frame.label}".\n\nDescription: ${description}\n\nUse Tailwind classes and iconify-icon where needed. Output only the complete inner body HTML, no markdown or explanation.`;
         const generated = await streamScreenHtmlWithDesignModel(
           designModel.vertex,
           designModel.modelId,
@@ -494,7 +390,7 @@ export function createTools(ctx: ToolContext) {
       },
     }),
 
-    edit_screen: tool({
+    edit_design: tool({
       description:
         "Targeted find/replace on screen HTML. Use for specific-section edits (e.g., change one button color). Preserves the rest of the UI. find must match read_screen output exactly. One edit per screen.",
       inputSchema: z.object({
@@ -506,7 +402,7 @@ export function createTools(ctx: ToolContext) {
         writer?.write({
           type: "tool-input-start",
           toolCallId,
-          toolName: "edit_screen",
+          toolName: "edit_design",
         });
         editScreenStreamBuffer.set(toolCallId, "");
       },
@@ -529,7 +425,7 @@ export function createTools(ctx: ToolContext) {
         { toolCallId },
       ) => {
         editScreenStreamBuffer.delete(toolCallId);
-        process.stdout.write("\n"); // end the screen-delta stream line in console
+        process.stdout.write("\n");
         const frame = frames.find((f) => f.id === id);
         if (!frame?.html) {
           return { success: false, error: "Screen not found" };
@@ -566,7 +462,7 @@ export function createTools(ctx: ToolContext) {
           type: "data-tool-call-end",
           data: {
             toolCallId,
-            toolName: "edit_screen",
+            toolName: "edit_design",
             frame: result.frame,
           },
         });
@@ -734,6 +630,13 @@ export function createTools(ctx: ToolContext) {
                       .describe(
                         "Screen labels or ids this agent owns (e.g. ['Home Search', 'Train Listing'])",
                       ),
+                    assignedFrameIds: z
+                      .array(z.string())
+                      .optional()
+                      .default([])
+                      .describe(
+                        "Canvas frame IDs for assigned screens (from create_all_screens results)",
+                      ),
                   }),
                 )
                 .min(1)
@@ -760,7 +663,11 @@ export function createTools(ctx: ToolContext) {
                 agents: agentInputs,
                 planContext = "",
               }: {
-                agents: Array<{ subTask: string; assignedScreens: string[] }>;
+                agents: Array<{
+                  subTask: string;
+                  assignedScreens: string[];
+                  assignedFrameIds?: string[];
+                }>;
                 planContext?: string;
               },
               { toolCallId: _toolCallId },
@@ -780,6 +687,7 @@ export function createTools(ctx: ToolContext) {
                   id: String(i),
                   subTask: a.subTask,
                   assignedScreens: a.assignedScreens ?? [],
+                  assignedFrameIds: a.assignedFrameIds ?? [],
                   screenPositions: positions,
                 };
               });
@@ -790,9 +698,6 @@ export function createTools(ctx: ToolContext) {
                 planContext,
                 theme: { ...theme },
               };
-              // Emit as data-* event so the client's onData callback receives it.
-              // AI SDK v6 only forwards data-* prefixed events to onData;
-              // standard tool-output-available is consumed internally by the SDK.
               writer?.write({
                 type: "data-spawn-agents",
                 data: result,

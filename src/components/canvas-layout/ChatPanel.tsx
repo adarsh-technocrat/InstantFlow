@@ -97,26 +97,27 @@ function getToolDisplayLabel(
   if (toolType === "update_theme")
     return isCalled ? "Updated theme" : "Updating theme…";
 
-  if (toolType === "create_screen" && input?.name) {
-    return isCalled
-      ? `Created ${toTitle(input.name)} screen`
-      : `Creating ${toTitle(input.name)} screen…`;
+  if (toolType === "create_all_screens") {
+    return isCalled ? "Created all screens" : "Creating all screens…";
   }
   if (
     input?.id &&
     (toolType === "read_screen" ||
       toolType === "update_screen" ||
-      toolType === "edit_screen")
+      toolType === "edit_design" ||
+      toolType === "design_screen")
   ) {
     const frame = frames.find((f) => f.id === input.id);
     const label = frame?.label ?? "Screen";
     const name = toTitle(label);
     if (toolType === "read_screen")
       return isCalled ? `Read ${name} screen` : `Reading ${name} screen…`;
-    if (toolType === "edit_screen")
+    if (toolType === "edit_design")
       return isCalled ? `Edited ${name} screen` : `Editing ${name} screen…`;
     if (toolType === "update_screen")
       return isCalled ? `Updated ${name} screen` : `Updating ${name} screen…`;
+    if (toolType === "design_screen")
+      return isCalled ? `Designed ${name} screen` : `Designing ${name} screen…`;
   }
 
   const base = toTitle(toolType.replace(/_/g, " "));
@@ -583,6 +584,7 @@ export function ChatPanel({
             id: string;
             subTask: string;
             assignedScreens: string[];
+            assignedFrameIds?: string[];
             screenPositions?: Array<{ left: number; top: number }>;
           }>;
           planContext?: string;
@@ -597,6 +599,7 @@ export function ChatPanel({
             initializeAgents({
               orchestrationId: spawnData.orchestrationId,
               assignments: spawnData.agents,
+              keepOrchestratorActive: true,
             }),
           );
           // Persist orchestration state for page reload recovery
@@ -625,12 +628,10 @@ export function ChatPanel({
         setToolSteps((prev) =>
           addStepIfNew(prev, { toolCallId, toolName, state: "running" }),
         );
-        if (agents.length === 0) {
-          if (toolName === "create_screen") {
-            dispatch(
-              setMainChatAgentFrame({ frameId: toolCallId, status: "working" }),
-            );
-          }
+        if (toolName === "design_screen") {
+          dispatch(
+            setMainChatAgentFrame({ frameId: toolCallId, status: "working" }),
+          );
         }
         return;
       }
@@ -747,9 +748,7 @@ export function ChatPanel({
         if (output?.theme) {
           dispatch(replaceTheme(output.theme));
         }
-        if (agents.length === 0) {
-          dispatch(setMainChatAgentFrame({ frameId: null, status: "idle" }));
-        }
+        dispatch(setMainChatAgentFrame({ frameId: null, status: "idle" }));
         return;
       }
       if (ev.type === "tool-input-available" && ev.toolCallId && ev.input) {
@@ -757,9 +756,9 @@ export function ChatPanel({
         setToolSteps((prev) => {
           const step = prev.find((s) => s.toolCallId === ev.toolCallId);
           if (
-            agents.length === 0 &&
             input.id &&
-            step?.toolName === "edit_screen"
+            (step?.toolName === "edit_design" ||
+              step?.toolName === "design_screen")
           ) {
             dispatch(
               setMainChatAgentFrame({ frameId: input.id, status: "working" }),
@@ -785,34 +784,11 @@ export function ChatPanel({
             state: "running",
           }),
         );
-        if (
-          agents.length === 0 &&
-          data.toolName === "create_screen" &&
-          data.frame?.id
-        ) {
-          dispatch(
-            setMainChatAgentFrame({
-              frameId: data.frame.id,
-              status: "working",
-            }),
-          );
-        }
-        if (data.toolName === "create_screen" && data.frame) {
-          dispatch(
-            addFrameWithId({
-              id: data.frame.id,
-              label: data.frame.label ?? "",
-              left: data.frame.left ?? 0,
-              top: data.frame.top ?? 0,
-              html: data.frame.html ?? "",
-            }),
-          );
-        }
         return;
       }
 
       if (ev.type === "data-tool-call-delta") {
-        if (data.toolName === "create_screen" && data.frame) {
+        if (data.toolName === "design_screen" && data.frame) {
           // Throttle HTML updates during streaming deltas
           if (data.frame.html !== undefined) {
             cpEnqueueHtml(data.frame.id, data.frame.html);
@@ -834,7 +810,8 @@ export function ChatPanel({
             );
           }
         } else if (
-          data.toolName === "update_screen" &&
+          (data.toolName === "update_screen" ||
+            data.toolName === "design_screen") &&
           data.frame?.html !== undefined
         ) {
           cpEnqueueHtml(data.frame.id, data.frame.html);
@@ -858,7 +835,11 @@ export function ChatPanel({
               : s,
           ),
         );
-        if (data.toolName === "create_screen" && data.frame) {
+        if (
+          (data.toolName === "create_screen" ||
+            data.toolName === "create_all_screens") &&
+          data.frame
+        ) {
           dispatch(
             addFrameWithId({
               id: data.frame.id,
@@ -894,7 +875,8 @@ export function ChatPanel({
           }
         } else if (
           (data.toolName === "update_screen" ||
-            data.toolName === "edit_screen") &&
+            data.toolName === "edit_design" ||
+            data.toolName === "design_screen") &&
           data.frame?.html !== undefined
         ) {
           dispatch(
@@ -919,10 +901,8 @@ export function ChatPanel({
         } else if (data.toolName === "build_theme" && data.theme) {
           dispatch(replaceTheme(data.theme));
         }
-        // Reset single-agent cursor when tool finishes
-        if (agents.length === 0) {
-          dispatch(setMainChatAgentFrame({ frameId: null, status: "idle" }));
-        }
+        // Reset main chat cursor when tool finishes
+        dispatch(setMainChatAgentFrame({ frameId: null, status: "idle" }));
         return;
       }
     },
@@ -1172,40 +1152,35 @@ export function ChatPanel({
               onClick={() => setShowHeaderDropdown((v) => !v)}
               className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-foreground transition-colors hover:bg-white/10"
             >
-              {isMultiAgent ? (
-                <>
-                  {activeAgentId === null ? (
+              {(() => {
+                if (isMultiAgent && activeAgentId !== null) {
+                  const active = agents.find((a) => a.id === activeAgentId);
+                  const persona = active
+                    ? {
+                        emoji: active.emoji,
+                        color: active.color,
+                        name: active.name,
+                      }
+                    : AGENT_PERSONAS[0];
+                  return (
                     <>
-                      <Zap className="size-3.5 text-[#8A87F8]" fill="#8A87F8" />
-                      <span className="text-[#8A87F8]">Plan</span>
+                      <span className="text-sm">{persona.emoji}</span>
+                      <span style={{ color: persona.color }}>
+                        {persona.name}
+                      </span>
                     </>
-                  ) : (
-                    (() => {
-                      const active = agents.find((a) => a.id === activeAgentId);
-                      const persona = active
-                        ? {
-                            emoji: active.emoji,
-                            color: active.color,
-                            name: active.name,
-                          }
-                        : AGENT_PERSONAS[0];
-                      return (
-                        <>
-                          <span className="text-sm">{persona.emoji}</span>
-                          <span style={{ color: persona.color }}>
-                            {persona.name}
-                          </span>
-                        </>
-                      );
-                    })()
-                  )}
-                </>
-              ) : (
-                <>
-                  <Zap className="size-3.5 text-[#8A87F8]" fill="#8A87F8" />
-                  {AGENT_PERSONAS[0].emoji} {AGENT_PERSONAS[0].name}
-                </>
-              )}
+                  );
+                }
+                // Default: show first persona (Pixel) for both single-agent and orchestrator view
+                return (
+                  <>
+                    <span className="text-sm">{AGENT_PERSONAS[0].emoji}</span>
+                    <span style={{ color: AGENT_PERSONAS[0].color }}>
+                      {AGENT_PERSONAS[0].name}
+                    </span>
+                  </>
+                );
+              })()}
               <span className="text-white/40">·</span>
               <span className="text-white/50 text-xs font-normal">
                 {activeFrameLabel.length > 12
@@ -1222,7 +1197,7 @@ export function ChatPanel({
                 {isMultiAgent
                   ? [
                       <button
-                        key="orchestrator"
+                        key="main-agent"
                         type="button"
                         onClick={() => {
                           dispatch(setActiveAgent(null));
@@ -1234,16 +1209,15 @@ export function ChatPanel({
                             : "text-white/85"
                         }`}
                       >
-                        <Zap
-                          className="size-3.5 text-[#8A87F8]"
-                          fill="#8A87F8"
-                        />
+                        <span className="text-sm">
+                          {AGENT_PERSONAS[0].emoji}
+                        </span>
                         <div className="flex flex-col">
-                          <span className="font-medium text-white/90">
-                            Plan
-                          </span>
-                          <span className="text-[10px] text-white/40">
-                            Orchestrator chat
+                          <span
+                            className="font-medium"
+                            style={{ color: AGENT_PERSONAS[0].color }}
+                          >
+                            {AGENT_PERSONAS[0].name}
                           </span>
                         </div>
                       </button>,
@@ -1344,7 +1318,10 @@ export function ChatPanel({
         className="min-h-0 flex-1 space-y-4 overflow-y-auto scrollbar-hide p-2"
       >
         {isMultiAgent && (
-          <div className="flex h-full flex-col" style={{ display: activeAgentId !== null ? "flex" : "none" }}>
+          <div
+            className="flex h-full flex-col"
+            style={{ display: activeAgentId !== null ? "flex" : "none" }}
+          >
             {agents.map((ag) => (
               <AgentChatInstance
                 key={ag.chatId}
