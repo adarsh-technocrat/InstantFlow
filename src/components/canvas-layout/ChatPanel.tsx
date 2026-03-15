@@ -17,8 +17,8 @@ import {
   initializeAgents,
   setActiveAgent,
   resetOrchestration,
-  setMainChatAgentFrame,
 } from "@/store/slices/agentSlice";
+import { cursor, initCursor } from "@/lib/cursor";
 import { AGENT_PERSONAS } from "@/constants/agent-personas";
 import { AgentChatInstance } from "./AgentChatInstance";
 import { Brain, ChevronDown, X, Zap } from "lucide-react";
@@ -476,6 +476,7 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const dispatch = useAppDispatch();
   cpDispatchRef = dispatch;
+  initCursor(dispatch);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -624,10 +625,8 @@ export function ChatPanel({
         setToolSteps((prev) =>
           addStepIfNew(prev, { toolCallId, toolName, state: "running" }),
         );
-        if (toolName === "design_screen") {
-          dispatch(
-            setMainChatAgentFrame({ frameId: toolCallId, status: "working" }),
-          );
+        if (toolName === "design_screen" || toolName === "read_screen") {
+          cursor.working(cursor.MAIN);
         }
         return;
       }
@@ -744,28 +743,40 @@ export function ChatPanel({
         if (output?.theme) {
           dispatch(replaceTheme(output.theme));
         }
-        dispatch(setMainChatAgentFrame({ frameId: null, status: "idle" }));
+        const finishedStep = toolStepsRef.current.find(
+          (s) => s.toolCallId === toolCallId,
+        );
+        if (
+          finishedStep?.toolName === "read_screen" &&
+          finishedStep?.input?.id
+        ) {
+          cursor.scan(cursor.MAIN, finishedStep.input.id);
+        } else if (finishedStep?.toolName !== "read_screen") {
+          cursor.hide(cursor.MAIN);
+        }
         return;
       }
       if (ev.type === "tool-input-available" && ev.toolCallId && ev.input) {
         const input = ev.input as { id?: string; name?: string };
-        setToolSteps((prev) => {
-          const step = prev.find((s) => s.toolCallId === ev.toolCallId);
-          if (
-            input.id &&
-            (step?.toolName === "edit_design" ||
-              step?.toolName === "design_screen")
-          ) {
-            dispatch(
-              setMainChatAgentFrame({ frameId: input.id, status: "working" }),
-            );
+        const step = toolStepsRef.current.find(
+          (s) => s.toolCallId === ev.toolCallId,
+        );
+        if (input.id && step) {
+          if (step.toolName === "design_screen") {
+            cursor.design(cursor.MAIN, input.id);
+          } else if (step.toolName === "read_screen") {
+            cursor.scan(cursor.MAIN, input.id);
+          } else if (step.toolName === "edit_design") {
+            cursor.show(cursor.MAIN, input.id);
           }
-          return prev.map((s) =>
+        }
+        setToolSteps((prev) =>
+          prev.map((s) =>
             s.toolCallId === ev.toolCallId
               ? { ...s, input: { id: input.id, name: input.name } }
               : s,
-          );
-        });
+          ),
+        );
         return;
       }
 
@@ -780,11 +791,28 @@ export function ChatPanel({
             state: "running",
           }),
         );
+        if (data.toolName === "read_screen") {
+          cursor.working(cursor.MAIN);
+        }
         return;
       }
 
       if (ev.type === "data-tool-call-delta") {
-        if (data.toolName === "design_screen" && data.frame) {
+        const dataWithArgs = data as { args?: { id?: string }; id?: string };
+        if (
+          data.toolName === "read_screen" &&
+          (dataWithArgs.id ?? dataWithArgs.args?.id)
+        ) {
+          const frameId = dataWithArgs.id ?? dataWithArgs.args?.id ?? "";
+          cursor.scan(cursor.MAIN, frameId);
+          setToolSteps((prev) =>
+            prev.map((s) =>
+              s.toolCallId === data.toolCallId
+                ? { ...s, input: { ...s.input, id: frameId } }
+                : s,
+            ),
+          );
+        } else if (data.toolName === "design_screen" && data.frame) {
           if (data.frame.html !== undefined) {
             cpEnqueueHtml(data.frame.id, data.frame.html);
           }
@@ -809,6 +837,9 @@ export function ChatPanel({
           data.frame?.html !== undefined
         ) {
           cpEnqueueHtml(data.frame.id, data.frame.html);
+          if (data.toolName === "design_screen" && data.frame.id) {
+            cursor.design(cursor.MAIN, data.frame.id);
+          }
         }
         return;
       }
@@ -818,6 +849,11 @@ export function ChatPanel({
         const endInput: { id?: string; name?: string } = {};
         if (data.frame?.id) endInput.id = data.frame.id;
         if (data.frame?.label) endInput.name = data.frame.label;
+        if (data.toolName === "read_screen") {
+          const dataWithArgs = data as { args?: { id?: string }; id?: string };
+          const readScreenId = dataWithArgs.args?.id ?? dataWithArgs.id;
+          if (readScreenId) endInput.id = readScreenId;
+        }
         setToolSteps((prev) =>
           prev.map((s) =>
             s.toolCallId === data.toolCallId
@@ -895,7 +931,16 @@ export function ChatPanel({
         } else if (data.toolName === "build_theme" && data.theme) {
           dispatch(replaceTheme(data.theme));
         }
-        dispatch(setMainChatAgentFrame({ frameId: null, status: "idle" }));
+        if (data.toolName === "read_screen") {
+          const frameId =
+            (data as { args?: { id?: string }; id?: string }).args?.id ??
+            (data as { id?: string }).id;
+          if (frameId) {
+            cursor.scan(cursor.MAIN, frameId);
+          }
+        } else {
+          cursor.hide(cursor.MAIN);
+        }
         return;
       }
     },

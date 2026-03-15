@@ -53,6 +53,7 @@ export const FramePreview = React.forwardRef<
   const isStreaming = html.length < LOADING_THRESHOLD;
   const [_loadKey, setLoadKey] = useState(0);
   const [inspectorScript, setInspectorScript] = useState("");
+  const hasFadedInRef = useRef(false);
   const internalRef = useRef<HTMLIFrameElement>(null);
   const postTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const writeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -100,11 +101,19 @@ export const FramePreview = React.forwardRef<
     };
   }, [frameId, html, label, left, top, isStreaming]);
 
-  const forceFullWriteRef = useRef(false);
+  const injectedInspectorRef = useRef(false);
   useEffect(() => {
-    if (inspectorScript && latestHtmlRef.current) {
-      forceFullWriteRef.current = true;
-    }
+    if (!inspectorScript || injectedInspectorRef.current) return;
+    const iframe = internalRef.current;
+    const doc = iframe?.contentDocument;
+    if (!doc?.body) return;
+    const existing = doc.querySelector("script[data-inspector]");
+    if (existing) return;
+    injectedInspectorRef.current = true;
+    const script = doc.createElement("script");
+    script.setAttribute("data-inspector", "true");
+    script.textContent = inspectorScript;
+    doc.body.appendChild(script);
   }, [inspectorScript]);
 
   const prevHtmlLenRef = useRef(0);
@@ -115,10 +124,6 @@ export const FramePreview = React.forwardRef<
     latestHtmlRef.current = preparedHtml;
 
     const doWrite = (incremental: boolean) => {
-      if (forceFullWriteRef.current) {
-        forceFullWriteRef.current = false;
-        incremental = false;
-      }
       lastWriteTimeRef.current = Date.now();
       const htmlToWrite = latestHtmlRef.current;
       writeContent(htmlToWrite, incremental);
@@ -188,9 +193,12 @@ export const FramePreview = React.forwardRef<
     );
   }
 
+  const showFadeIn = !isStreaming && !hasFadedInRef.current;
+  if (showFadeIn) hasFadedInRef.current = true;
+
   const iframeClassName = [
     "size-full border-0 bg-white scrollbar-hide",
-    !isStreaming && "frame-fade-in",
+    showFadeIn && "frame-fade-in",
     allowInteraction ? "pointer-events-auto" : "pointer-events-none",
   ]
     .filter(Boolean)

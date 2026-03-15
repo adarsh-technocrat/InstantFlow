@@ -11,10 +11,8 @@ import {
   setTheme,
   replaceTheme,
 } from "@/store/slices/canvasSlice";
-import {
-  updateAgentStatus,
-  updateAgentActiveFrame,
-} from "@/store/slices/agentSlice";
+import { updateAgentStatus } from "@/store/slices/agentSlice";
+import { cursor, initCursor } from "@/lib/cursor";
 
 const FRAME_HTML_THROTTLE_MS = 300;
 
@@ -402,6 +400,7 @@ export function AgentChatInstance({
   planContext,
 }: AgentChatInstanceProps) {
   const dispatch = useAppDispatch();
+  initCursor(dispatch);
   const frames = useAppSelector((s) => s.canvas.frames);
   const theme = useAppSelector((s) => s.canvas.theme);
   dispatchRef = dispatch;
@@ -569,10 +568,25 @@ export function AgentChatInstance({
         if (output?.theme) {
           dispatch(replaceTheme(output.theme));
         }
+        const finishedStep = toolStepsRef.current.find(
+          (s) => s.toolCallId === toolCallId,
+        );
+        if (
+          finishedStep?.toolName === "read_screen" &&
+          finishedStep?.input?.id
+        ) {
+          cursor.scan(agent.id, finishedStep.input.id);
+        }
         return;
       }
       if (ev.type === "tool-input-available" && ev.toolCallId && ev.input) {
         const input = ev.input as { id?: string; name?: string };
+        const step = toolStepsRef.current.find(
+          (s) => s.toolCallId === ev.toolCallId,
+        );
+        if (input.id && step?.toolName === "read_screen") {
+          cursor.scan(agent.id, input.id);
+        }
         setToolSteps((prev) =>
           prev.map((s) =>
             s.toolCallId === ev.toolCallId
@@ -605,12 +619,7 @@ export function AgentChatInstance({
         ) {
           enqueueHtmlUpdate(data.frame.id, data.frame.html);
           if (data.toolName === "design_screen") {
-            dispatch(
-              updateAgentActiveFrame({
-                id: agent.id,
-                frameId: data.frame.id,
-              }),
-            );
+            cursor.design(agent.id, data.frame.id);
           }
         }
         return;
@@ -641,6 +650,9 @@ export function AgentChatInstance({
           dispatch(
             updateFrameHtml({ id: data.frame.id, html: data.frame.html }),
           );
+          if (data.toolName === "design_screen") {
+            cursor.hide(agent.id);
+          }
           const frame = stateRef.current.frames.find(
             (f) => f.id === data.frame?.id,
           );
@@ -715,7 +727,7 @@ export function AgentChatInstance({
           status: isError ? "error" : "done",
         }),
       );
-      dispatch(updateAgentActiveFrame({ id: agent.id, frameId: null }));
+      cursor.hide(agent.id);
     },
   });
 

@@ -15,9 +15,17 @@ function extractBody(html: string): string | null {
 function writeDocFull(iframe: HTMLIFrameElement | null, html: string) {
   if (!iframe?.contentDocument || !html) return;
   const doc = iframe.contentDocument;
+  const scrollTop = doc.documentElement?.scrollTop ?? 0;
   doc.open();
   doc.write(html);
   doc.close();
+  if (scrollTop > 0) {
+    requestAnimationFrame(() => {
+      if (iframe.contentDocument?.documentElement) {
+        iframe.contentDocument.documentElement.scrollTop = scrollTop;
+      }
+    });
+  }
 }
 
 export interface UseIframeBridgeOptions {
@@ -42,19 +50,31 @@ export function useIframeBridge(
   }, [onMessage]);
 
   const hasWrittenRef = useRef(false);
+  const lastWrittenHtmlRef = useRef("");
 
   const writeContent = useCallback(
     (html: string, incremental = false) => {
       const iframe = iframeRef.current;
       if (!iframe || !html) return;
+
+      if (html === lastWrittenHtmlRef.current) return;
+      lastWrittenHtmlRef.current = html;
+
       const doc = iframe.contentDocument;
 
       if (incremental && hasWrittenRef.current && doc?.body) {
         const newBody = extractBody(html);
         if (newBody !== null) {
           const scrollTop = doc.documentElement?.scrollTop ?? 0;
-          doc.body.innerHTML = newBody;
-          doc.documentElement.scrollTop = scrollTop;
+          requestAnimationFrame(() => {
+            if (!iframe.contentDocument?.body) return;
+            iframe.contentDocument.body.innerHTML = newBody;
+            requestAnimationFrame(() => {
+              if (iframe.contentDocument?.documentElement) {
+                iframe.contentDocument.documentElement.scrollTop = scrollTop;
+              }
+            });
+          });
           return;
         }
       }

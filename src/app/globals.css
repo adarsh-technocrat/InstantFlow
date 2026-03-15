@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+/* ─── Theme Variables ─────────────────────────────────────────────────────── */
+
 :root {
   --container-5xl: 64rem;
   --background: #ffffff;
@@ -13,7 +15,6 @@
   --foreground-muted: #71717a;
   --frame-border: #a78bfa;
   --frame-hover-border: #6366f1;
-  /* Layout glass – theme-aligned (light) */
   --panel-glass-bg: rgba(255, 255, 255, 0.88);
   --panel-glass-border: rgba(228, 228, 231, 0.6);
   --panel-glass-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
@@ -22,6 +23,29 @@
   --secondary: #f4f4f5;
   --secondary-foreground: #18181b;
   --input: #f4f4f5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    --background-secondary: #18181b;
+    --border: #27272a;
+    --accent: #27272a;
+    --accent-foreground: #fafafa;
+    --muted-foreground: #a1a1aa;
+    --foreground-muted: #a1a1aa;
+    --frame-border: #c4b5fd;
+    --frame-hover-border: #818cf8;
+    --primary: #18181b;
+    --primary-foreground: #fafafa;
+    --secondary: #27272a;
+    --secondary-foreground: #fafafa;
+    --input: #27272a;
+    --panel-glass-bg: rgba(24, 24, 27, 0.88);
+    --panel-glass-border: rgba(39, 39, 42, 0.8);
+    --panel-glass-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  }
 }
 
 @theme inline {
@@ -43,29 +67,7 @@
   --z-index-100: 100;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --background-secondary: #18181b;
-    --border: #27272a;
-    --accent: #27272a;
-    --accent-foreground: #fafafa;
-    --muted-foreground: #a1a1aa;
-    --foreground-muted: #a1a1aa;
-    --frame-border: #c4b5fd;
-    --frame-hover-border: #818cf8;
-    --primary: #18181b;
-    --primary-foreground: #fafafa;
-    --secondary: #27272a;
-    --secondary-foreground: #fafafa;
-    --input: #27272a;
-    /* Layout glass – theme-aligned (dark) */
-    --panel-glass-bg: rgba(24, 24, 27, 0.88);
-    --panel-glass-border: rgba(39, 39, 42, 0.8);
-    --panel-glass-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-  }
-}
+/* ─── Base ────────────────────────────────────────────────────────────────── */
 
 body {
   background: var(--background);
@@ -74,14 +76,18 @@ body {
   touch-action: pan-x pan-y;
 }
 
+/* ─── Panel & Layout ──────────────────────────────────────────────────────── */
+
 .bg-panel-glass {
   background: var(--panel-glass-bg);
   border: 1px solid var(--panel-glass-border);
   box-shadow: var(--panel-glass-shadow);
 }
+
 .shadow-panel-glass {
   box-shadow: var(--panel-glass-shadow);
 }
+
 .reference-mode-button {
   background: #48413f;
   color: #fafafa;
@@ -92,38 +98,135 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* ─── Scrollbar ───────────────────────────────────────────────────────────── */
+
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
 
+/* ─── Frame Preview ───────────────────────────────────────────────────────── */
+
 @keyframes frame-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
+
 .frame-fade-in {
   animation: frame-fade-in 0.3s ease-out;
 }
 
 .frame-preview-gradient {
-  background: linear-gradient(
-    135deg,
-    #1a1615 0%,
-    #2a2524 25%,
-    #1d1716 50%,
-    #2a2524 75%,
-    #1a1615 100%
-  );
+  background: linear-gradient(135deg, #1a1615 0%, #2a2524 25%, #1d1716 50%, #2a2524 75%, #1a1615 100%);
   background-size: 200% 200%;
   animation: frame-preview-shimmer 2s ease infinite;
 }
+
+/* ─── Overlay Sheet (Agent Design Overlay) ────────────────────────────────── */
+
+@keyframes orbit-cw {
+  0%   { transform: translate(-50%, -50%) rotate(0deg) translateX(38%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg) translateX(38%) rotate(-360deg); }
+}
+
+@keyframes orbit-cw-offset {
+  0%   { transform: translate(-50%, -50%) rotate(180deg) translateX(38%) rotate(-180deg); }
+  100% { transform: translate(-50%, -50%) rotate(540deg) translateX(38%) rotate(-540deg); }
+}
+
+.overlay-sheet-card {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: linear-gradient(160deg, rgba(26, 34, 96, 0.45) 0%, rgba(15, 21, 64, 0.5) 40%, rgba(19, 26, 80, 0.45) 70%, rgba(26, 34, 96, 0.45) 100%);
+  border: 1px solid rgba(107, 127, 255, 0.35);
+  box-shadow:
+    0 0 0 1px rgba(107, 127, 255, 0.12),
+    0 0 24px 2px rgba(107, 127, 255, 0.08);
+  backdrop-filter: blur(1px);
+}
+
+.overlay-sheet-blob {
+  position: absolute;
+  pointer-events: none;
+  z-index: 40;
+  border-radius: 50%;
+}
+
+.overlay-sheet-blob-1 {
+  width: 600px;
+  height: 600px;
+  top: 50%;
+  left: 50%;
+  animation: orbit-cw 7s linear infinite;
+}
+
+.overlay-sheet-blob-2 {
+  width: 560px;
+  height: 560px;
+  top: 50%;
+  left: 50%;
+  animation: orbit-cw-offset 7s linear infinite;
+}
+
+.overlay-sheet-blob-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(107, 127, 255, 0.25) 0%, rgba(107, 127, 255, 0) 70%);
+  filter: blur(80px);
+}
+
+.overlay-sheet-glow-rim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  box-shadow: inset 0 0 32px 0 rgba(107, 127, 255, 0.08);
+}
+
+.overlay-sheet-tint {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  background: linear-gradient(160deg, rgba(26, 34, 96, 0.2) 0%, rgba(15, 21, 64, 0.25) 40%, rgba(19, 26, 80, 0.22) 70%, rgba(26, 34, 96, 0.2) 100%);
+}
+
+.overlay-sheet-content {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.overlay-sheet-label {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+  color: #6b7fff;
+}
+
+/* ─── Shutter Scan Effect ─────────────────────────────────────────────────── */
+
+@keyframes shutter-grow {
+  0%   { height: 0%; }
+  100% { height: 100%; }
+}
+
+@keyframes shutter-line {
+  0%   { top: 0%; }
+  100% { top: 100%; }
+}
+
+/* ─── Code Dialog (Shiki) ─────────────────────────────────────────────────── */
 
 @media (prefers-color-scheme: dark) {
   .shiki {
@@ -141,15 +244,4 @@ body {
 .code-dialog-shiki .shiki span {
   color: var(--shiki-dark) !important;
   background-color: transparent !important;
-}
-
-/* ===== SHUTTER SCAN EFFECT ===== */
-@keyframes shutter-grow {
-  0%   { height: 0%; }
-  100% { height: 100%; }
-}
-
-@keyframes shutter-line {
-  0%   { top: 0%; }
-  100% { top: 100%; }
 }

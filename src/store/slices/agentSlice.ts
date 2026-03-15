@@ -1,6 +1,8 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import { AGENT_PERSONAS } from "@/constants/agent-personas";
 
+export type FrameOverlayType = "scan" | "design" | null;
+
 export interface AgentInstance {
   id: string;
   name: string;
@@ -13,6 +15,7 @@ export interface AgentInstance {
   status: "idle" | "working" | "done" | "error";
   chatId: string;
   activeFrameId: string | null;
+  activeOverlay: FrameOverlayType;
   cursorProgress: number;
 }
 
@@ -24,6 +27,7 @@ interface AgentState {
   activeAgentId: string | null;
   agentCount: number;
   mainChatActiveFrameId: string | null;
+  mainChatActiveOverlay: FrameOverlayType;
   mainChatStatus: MainChatAgentStatus;
 }
 
@@ -33,6 +37,7 @@ const initialState: AgentState = {
   activeAgentId: null,
   agentCount: 1,
   mainChatActiveFrameId: null,
+  mainChatActiveOverlay: null,
   mainChatStatus: "idle",
 };
 
@@ -62,6 +67,7 @@ const agentSlice = createSlice({
       state.orchestrationId = orchestrationId;
       if (!keepOrchestratorActive) {
         state.mainChatActiveFrameId = null;
+        state.mainChatActiveOverlay = null;
         state.mainChatStatus = "idle";
       }
       state.agents = assignments.map((a, i) => {
@@ -78,6 +84,7 @@ const agentSlice = createSlice({
           status: "idle" as const,
           chatId: `orch-${orchestrationId}-${persona.name.toLowerCase()}`,
           activeFrameId: null,
+          activeOverlay: null,
           cursorProgress: 0,
         };
       });
@@ -100,11 +107,16 @@ const agentSlice = createSlice({
     },
     updateAgentActiveFrame(
       state,
-      action: PayloadAction<{ id: string; frameId: string | null }>,
+      action: PayloadAction<{
+        id: string;
+        frameId: string | null;
+        overlay?: FrameOverlayType;
+      }>,
     ) {
       const agent = state.agents.find((a) => a.id === action.payload.id);
       if (agent) {
         agent.activeFrameId = action.payload.frameId;
+        agent.activeOverlay = action.payload.overlay ?? null;
         agent.cursorProgress = 0;
       }
     },
@@ -122,6 +134,7 @@ const agentSlice = createSlice({
       state.agents = [];
       state.activeAgentId = null;
       state.mainChatActiveFrameId = null;
+      state.mainChatActiveOverlay = null;
       state.mainChatStatus = "idle";
     },
     setMainChatAgentFrame(
@@ -129,11 +142,14 @@ const agentSlice = createSlice({
       action: PayloadAction<{
         frameId: string | null;
         status?: MainChatAgentStatus;
+        overlay?: FrameOverlayType;
       }>,
     ) {
-      const { frameId, status } = action.payload;
+      const { frameId, status, overlay } = action.payload;
       if (frameId !== undefined) state.mainChatActiveFrameId = frameId;
       if (status !== undefined) state.mainChatStatus = status;
+      if (overlay !== undefined) state.mainChatActiveOverlay = overlay;
+      if (frameId === null) state.mainChatActiveOverlay = null;
     },
   },
 });

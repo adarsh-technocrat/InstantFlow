@@ -58,7 +58,11 @@ export function Canvas() {
     const prevIds = prevFrameIdsRef.current;
     const addedIds = [...currentIds].filter((id) => !prevIds.has(id));
     if (addedIds.length > 1) {
-      fitView(containerRef.current, { top: 80, right: 80, bottom: 80, left: 400 }, 0.6);
+      fitView(
+        containerRef.current,
+        { top: 80, right: 80, bottom: 80, left: 400 },
+        0.6,
+      );
     } else if (
       addedIds.length === 1 &&
       selectedFrameIds[0] === addedIds[0] &&
@@ -239,7 +243,7 @@ export function Canvas() {
       aria-label="Canvas"
     >
       <div
-        className={`absolute left-0 top-0 origin-top-left will-change-transform ${!isPanning && !isZooming ? "transition-transform duration-150 ease-out" : ""}`}
+        className="absolute left-0 top-0 origin-top-left will-change-transform"
         style={{
           transform: `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0) scale(${scale})`,
           backfaceVisibility: "hidden" as const,

@@ -205,10 +205,21 @@ export function createTools(ctx: ToolContext) {
           toolName: "read_screen",
         });
       },
-      execute: async ({ id }: { id: string }) => {
+      execute: async (
+        { id }: { id: string },
+        { toolCallId }: { toolCallId: string },
+      ) => {
+        writer?.write({
+          type: "data-tool-call-start",
+          data: { toolCallId, toolName: "read_screen" },
+        });
         const frame = frames.find((f) => f.id === id);
         const html = frame?.html ? extractBodyContent(frame.html) : "";
         const result = html || "(empty screen)";
+        writer?.write({
+          type: "data-tool-call-end",
+          data: { toolCallId, toolName: "read_screen", id },
+        });
         return result;
       },
     }),

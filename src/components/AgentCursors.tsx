@@ -262,6 +262,7 @@ export function AgentCursors() {
         status: "working" as const,
         chatId: "main",
         activeFrameId: mainChatActiveFrameId,
+        activeOverlay: null,
         cursorProgress: 0,
       } as AgentInstance);
     }
@@ -289,6 +290,7 @@ export function AgentCursors() {
                 status: "done" as const,
                 chatId: "main",
                 activeFrameId: mainChatActiveFrameId,
+                activeOverlay: null,
                 cursorProgress: 0,
               } as AgentInstance)
             : null);
