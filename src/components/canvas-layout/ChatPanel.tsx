@@ -13,6 +13,7 @@ import {
   replaceTheme,
 } from "@/store/slices/canvasSlice";
 import { pushAgentLog } from "@/store/slices/uiSlice";
+import { registerChatSend, unregisterChatSend } from "@/lib/chat-bridge";
 import { cursor, initCursor } from "@/lib/cursor";
 import { Brain, ChevronDown, X, Zap } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -1095,6 +1096,18 @@ export function ChatPanel({
     },
     [inputValue, sendMessage, setToolSteps, dispatch],
   );
+
+  // Register send function for the bottom input box
+  useEffect(() => {
+    const bridgeSend = (text: string) => {
+      setToolSteps([]);
+      setLastMessageToolSteps([]);
+      dispatch(pushAgentLog({ type: "user", text }));
+      sendMessage({ text });
+    };
+    registerChatSend(bridgeSend);
+    return () => unregisterChatSend();
+  }, [sendMessage, dispatch, setToolSteps]);
 
   useEffect(() => {
     chatThreadRef.current?.scrollTo({

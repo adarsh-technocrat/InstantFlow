@@ -1,381 +1,265 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 
 const recentProjects = [
-  {
-    id: "1",
-    name: "Health Tracker",
-    updatedAt: "2 hours ago",
-    screens: 8,
-    thumbnail:
-      "https://lh3.googleusercontent.com/CwGQkERZQIadMhpEphW3k58HmhCs02NQRYpR9L_GIhU7qHIDfQlJp-ykadYDGA-x6_Bkq_Ea2r-fFr3rv4kW8Xw9A1DgJuD9hlE5Fw",
-  },
-  {
-    id: "2",
-    name: "Social Media App",
-    updatedAt: "Yesterday",
-    screens: 12,
-    thumbnail:
-      "https://lh3.googleusercontent.com/-MMEDlQhYVE8CLSReq5dD_9s_mXvDaJUB8HaM-gKSh4LUsgjpQOK3ov7qdaH7hsVFDF0rc3L6Hi1ppWlaWx-rYMhK8IAViAM-Gk",
-  },
-  {
-    id: "3",
-    name: "E-Commerce Store",
-    updatedAt: "3 days ago",
-    screens: 15,
-    thumbnail:
-      "https://lh3.googleusercontent.com/D6d1SQF0r3pePXE2e02y5nuvncVNFlQTMLmJm8ycWnjxC0Re9wQdvjQWHgcYYpduzGd7_QrfUTjC-OBUjDHOf_vWQ7fkMSRyEwhJ",
-  },
-  {
-    id: "4",
-    name: "Fitness Dashboard",
-    updatedAt: "5 days ago",
-    screens: 6,
-    thumbnail:
-      "https://lh3.googleusercontent.com/7zm0iGoJpEdqqpo4GoqcLdOn0k-s9ZEMVy4MYn6Ia_3_FLlOzKHpb2iLlq7mVaLN7E4_5raueLuya7-MuvUyWFILPxBSdhTTz1XN",
-  },
-  {
-    id: "5",
-    name: "Food Delivery",
-    updatedAt: "1 week ago",
-    screens: 10,
-    thumbnail:
-      "https://lh3.googleusercontent.com/kpKlgqVM9HpnzkABysl_zNiUI-dgwj1kzHnRnh1qkwyxedx6b7dqHkTnNa8cvACvifn2lIHWb95KStpEgveKsl621OibIwFtkky-Ng=w1200",
-  },
+  { id: "1", name: "Health Tracker", updatedAt: "2 hours ago", screens: 8 },
+  { id: "2", name: "Social Media App", updatedAt: "Yesterday", screens: 12 },
+  { id: "3", name: "E-Commerce Store", updatedAt: "3 days ago", screens: 15 },
+  { id: "4", name: "Fitness Dashboard", updatedAt: "5 days ago", screens: 6 },
 ];
 
-const templates = [
-  { id: "t1", name: "Blank Project", icon: "+" },
-  { id: "t2", name: "Social App", icon: "💬" },
-  { id: "t3", name: "E-Commerce", icon: "🛍" },
-  { id: "t4", name: "Health & Fitness", icon: "💪" },
-  { id: "t5", name: "Finance", icon: "💰" },
+const prompts = [
+  "A fitness tracker with dark theme and weekly charts",
+  "E-commerce app with product cards and cart",
+  "Social media feed with stories and bottom nav",
+  "Music player with album art and playlist view",
 ];
 
-export default function DashboardPage() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [view, setView] = useState<"grid" | "list">("grid");
+function StreamingPlaceholder() {
+  const [promptIndex, setPromptIndex] = useState(0);
+  const [displayed, setDisplayed] = useState("");
+  const [isTyping, setIsTyping] = useState(true);
 
-  const filteredProjects = recentProjects.filter((p) =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  useEffect(() => {
+    const text = prompts[promptIndex];
+    let charIndex = 0;
+    setDisplayed("");
+    setIsTyping(true);
+
+    const typeInterval = setInterval(() => {
+      if (charIndex < text.length) {
+        setDisplayed(text.slice(0, charIndex + 1));
+        charIndex++;
+      } else {
+        clearInterval(typeInterval);
+        setIsTyping(false);
+        setTimeout(() => {
+          setPromptIndex((prev) => (prev + 1) % prompts.length);
+        }, 2500);
+      }
+    }, 40);
+
+    return () => clearInterval(typeInterval);
+  }, [promptIndex]);
 
   return (
-    <div className="flex h-screen w-full bg-[#0a0a0a] text-white">
-      {/* Sidebar */}
-      <aside className="hidden w-[260px] flex-shrink-0 flex-col border-r border-white/[0.08] bg-[#0a0a0a] md:flex">
-        <div className="flex h-14 items-center gap-2 px-5">
-          <span
-            className="text-base font-bold text-white tracking-tight"
-            style={{ fontFamily: "var(--font-logo), 'Space Grotesk', sans-serif" }}
-          >
-            launchpad<span className="text-white/50">.ai</span>
-          </span>
-        </div>
+    <span className="text-white/25">
+      {displayed}
+      {isTyping && (
+        <span className="inline-block w-px h-4 bg-white/40 ml-0.5 animate-pulse align-middle" />
+      )}
+    </span>
+  );
+}
 
-        <nav className="flex flex-1 flex-col gap-0.5 px-3 pt-2">
-          <SidebarItem icon={<HomeIcon />} label="Home" active />
-          <SidebarItem icon={<ProjectsIcon />} label="Projects" />
-          <SidebarItem icon={<TemplatesIcon />} label="Templates" />
-          <SidebarItem icon={<StarIcon />} label="Starred" />
-          <SidebarItem icon={<TrashIcon />} label="Trash" />
+export default function DashboardPage() {
+  const [inputValue, setInputValue] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-          <div className="my-4 h-px bg-white/[0.08]" />
+  const handleSubmit = () => {
+    if (!inputValue.trim()) return;
+    window.location.href = "/app";
+  };
 
-          <p className="mb-2 px-3 text-[11px] font-medium uppercase tracking-wider text-white/30">
-            Teams
-          </p>
-          <SidebarItem icon={<TeamIcon />} label="Personal" />
-          <SidebarItem icon={<TeamIcon />} label="Launchpad AI Team" />
-        </nav>
+  return (
+    <div className="h-screen w-full bg-black text-white p-3">
+      {/* Main container — inset from all edges */}
+      <div className="h-full w-full rounded-2xl border border-white/[0.1] bg-[#0a0a0a] overflow-hidden flex flex-col relative">
+        {/* Dotted canvas bg */}
+        <div
+          className="pointer-events-none absolute inset-0 z-0"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)",
+            backgroundSize: "20px 20px",
+          }}
+        />
 
-        <div className="border-t border-white/[0.08] p-3">
-          <div className="flex items-center gap-3 rounded-lg px-3 py-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-sm font-semibold">
-              A
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="truncate text-sm font-medium text-white">Adarsh Kumar</p>
-              <p className="truncate text-xs text-white/40">Free plan</p>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main content */}
-      <main className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex h-14 flex-shrink-0 items-center justify-between gap-4 border-b border-white/[0.08] px-6">
-          <div className="relative flex-1 max-w-md">
-            <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30"
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="none"
+        <header className="relative z-10 flex items-center justify-between h-12 px-5 border-b border-white/[0.08] flex-shrink-0">
+          <Link
+            href="/"
+            className="no-underline flex items-center gap-2"
+          >
+            <span
+              className="text-sm font-bold text-white tracking-tight"
+              style={{
+                fontFamily: "var(--font-logo), 'Space Grotesk', sans-serif",
+              }}
             >
-              <path
-                d="M7 12A5 5 0 107 2a5 5 0 000 10zM13 13l-3-3"
+              launchpad<span className="text-white/40">.ai</span>
+            </span>
+          </Link>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono text-white/20 uppercase tracking-wider">
+              Dashboard
+            </span>
+            <div className="ml-2 h-4 w-px bg-white/[0.08]" />
+            <button className="flex h-7 w-7 items-center justify-center rounded-full border border-white/[0.1] text-white/40 hover:text-white hover:border-white/[0.2] transition-colors">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
                 stroke="currentColor"
                 strokeWidth="1.5"
                 strokeLinecap="round"
-              />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search projects..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-9 w-full rounded-lg border border-white/[0.08] bg-white/[0.04] pl-9 pr-3 text-sm text-white placeholder-white/30 outline-none focus:border-white/20 focus:bg-white/[0.06] transition-colors"
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setView("grid")}
-              className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
-                view === "grid"
-                  ? "bg-white/10 text-white"
-                  : "text-white/40 hover:text-white/70"
-              }`}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <rect x="1" y="1" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
-                <rect x="9" y="1" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
-                <rect x="1" y="9" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
-                <rect x="9" y="9" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
+              >
+                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
               </svg>
             </button>
-            <button
-              onClick={() => setView("list")}
-              className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
-                view === "list"
-                  ? "bg-white/10 text-white"
-                  : "text-white/40 hover:text-white/70"
-              }`}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </button>
-
-            <div className="ml-2 h-5 w-px bg-white/[0.08]" />
-
-            <Link
-              href="/app?view=canvas"
-              className="ml-2 flex h-9 items-center gap-2 rounded-lg bg-white px-4 text-sm font-medium text-black hover:bg-white/90 transition-colors no-underline"
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-              New Project
-            </Link>
           </div>
         </header>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto px-6 py-6">
-          {/* Quick start */}
-          <section className="mb-10">
-            <h2 className="mb-4 text-sm font-medium text-white/50">
-              Start from a template
-            </h2>
-            <div className="flex gap-3 overflow-x-auto pb-2">
-              {templates.map((t) => (
-                <Link
-                  key={t.id}
-                  href="/app?view=canvas"
-                  className="group flex h-24 w-32 flex-shrink-0 flex-col items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] transition-all hover:border-white/20 hover:bg-white/[0.06] no-underline"
-                >
-                  <span className="text-2xl">{t.icon}</span>
-                  <span className="text-xs text-white/60 group-hover:text-white/80">
-                    {t.name}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </section>
+        {/* Center content */}
+        <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6">
+          {/* Greeting */}
+          <motion.div
+            className="flex flex-col items-center text-center mb-10"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            <h1
+              className="text-3xl md:text-4xl font-semibold tracking-tight text-white"
+              style={{
+                fontFamily: "var(--font-logo), 'Space Grotesk', sans-serif",
+              }}
+            >
+              What would you like
+              <br />
+              <span className="text-white/30">to build today?</span>
+            </h1>
+          </motion.div>
 
-          {/* Recent projects */}
-          <section>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-medium text-white/50">
-                Recent projects
-              </h2>
-              <button className="text-xs text-white/40 hover:text-white/70 transition-colors">
-                View all
-              </button>
-            </div>
-
-            {view === "grid" ? (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {filteredProjects.map((project) => (
-                  <Link
-                    key={project.id}
-                    href="/app?view=canvas"
-                    className="group flex flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.03] transition-all hover:border-white/15 hover:bg-white/[0.05] no-underline"
-                  >
-                    <div className="relative aspect-[4/3] w-full overflow-hidden bg-white/[0.02]">
-                      <img
-                        alt={project.name}
-                        src={project.thumbnail}
-                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                      />
-                    </div>
-                    <div className="flex items-center gap-3 px-4 py-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-white">
-                          {project.name}
-                        </p>
-                        <p className="mt-0.5 text-xs text-white/40">
-                          {project.screens} screens &middot; {project.updatedAt}
-                        </p>
-                      </div>
-                      <button
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-white/30 opacity-0 transition-all hover:bg-white/10 hover:text-white/60 group-hover:opacity-100"
-                        onClick={(e) => e.preventDefault()}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                          <circle cx="7" cy="3" r="1" fill="currentColor" />
-                          <circle cx="7" cy="7" r="1" fill="currentColor" />
-                          <circle cx="7" cy="11" r="1" fill="currentColor" />
-                        </svg>
-                      </button>
-                    </div>
-                  </Link>
-                ))}
+          {/* Prompt input */}
+          <motion.div
+            className="w-full max-w-[580px]"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15, duration: 0.6 }}
+          >
+            <div className="rounded-2xl border border-white/[0.15] bg-[#111113]/90 backdrop-blur-xl shadow-[0_8px_48px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all focus-within:border-white/[0.25]">
+              <div className="px-4 pt-4 pb-2 relative">
+                {/* Streaming placeholder when empty */}
+                {!inputValue && (
+                  <div className="absolute inset-x-4 top-4 pointer-events-none text-[15px] leading-relaxed">
+                    <StreamingPlaceholder />
+                  </div>
+                )}
+                <textarea
+                  ref={inputRef}
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSubmit();
+                    }
+                  }}
+                  placeholder=""
+                  rows={3}
+                  className="w-full bg-transparent text-[15px] text-white placeholder-transparent outline-none resize-none leading-relaxed min-h-[76px] max-h-[140px] relative z-10"
+                  onInput={(e) => {
+                    const el = e.currentTarget;
+                    el.style.height = "auto";
+                    el.style.height = Math.min(el.scrollHeight, 140) + "px";
+                  }}
+                />
               </div>
-            ) : (
-              <div className="flex flex-col gap-1">
-                {filteredProjects.map((project) => (
-                  <Link
-                    key={project.id}
-                    href="/app?view=canvas"
-                    className="group flex items-center gap-4 rounded-lg px-4 py-3 transition-colors hover:bg-white/[0.04] no-underline"
+
+              <div className="flex items-center justify-between px-4 py-2.5 border-t border-white/[0.08]">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex size-7 items-center justify-center rounded-md text-white/25 hover:text-white/50 hover:bg-white/[0.05] transition-colors"
+                    title="Attach"
                   >
-                    <div className="h-10 w-14 flex-shrink-0 overflow-hidden rounded-md bg-white/[0.05]">
-                      <img
-                        alt={project.name}
-                        src={project.thumbnail}
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-white">
-                        {project.name}
-                      </p>
-                    </div>
-                    <p className="text-xs text-white/30">
-                      {project.screens} screens
-                    </p>
-                    <p className="w-24 text-right text-xs text-white/30">
-                      {project.updatedAt}
-                    </p>
-                    <button
-                      className="flex h-7 w-7 items-center justify-center rounded-md text-white/30 opacity-0 transition-all hover:bg-white/10 hover:text-white/60 group-hover:opacity-100"
-                      onClick={(e) => e.preventDefault()}
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 256 256"
+                      fill="currentColor"
                     >
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                        <circle cx="7" cy="3" r="1" fill="currentColor" />
-                        <circle cx="7" cy="7" r="1" fill="currentColor" />
-                        <circle cx="7" cy="11" r="1" fill="currentColor" />
-                      </svg>
-                    </button>
-                  </Link>
-                ))}
-              </div>
-            )}
+                      <path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z" />
+                    </svg>
+                  </button>
+                  <span className="text-[10px] font-mono text-white/20 border border-white/[0.08] rounded px-1.5 py-0.5 bg-white/[0.03]">
+                    Flutter · Dart
+                  </span>
+                </div>
 
-            {filteredProjects.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-20 text-center">
-                <p className="text-sm text-white/40">No projects found</p>
-                <p className="mt-1 text-xs text-white/25">
-                  Try a different search term
-                </p>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono text-white/15 border border-white/[0.08] rounded px-1.5 py-0.5 hidden sm:inline bg-white/[0.03]">
+                    ⌘ Enter
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={!inputValue.trim()}
+                    className="inline-flex size-8 items-center justify-center rounded-lg bg-white text-black transition-all hover:bg-white/90 disabled:opacity-15 disabled:pointer-events-none active:scale-95"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M5 12h14M12 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
               </div>
-            )}
-          </section>
+            </div>
+          </motion.div>
         </div>
-      </main>
+
+        {/* Bottom — recent projects */}
+        <motion.div
+          className="relative z-10 border-t border-white/[0.06] flex-shrink-0"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3, duration: 0.5 }}
+        >
+          <div className="flex items-center justify-between px-5 py-2.5">
+            <span className="text-[10px] font-mono font-medium uppercase tracking-wider text-white/25">
+              Recent
+            </span>
+            <Link
+              href="/app"
+              className="text-[10px] font-mono uppercase tracking-wider text-white/20 hover:text-white/50 transition-colors no-underline"
+            >
+              View all
+            </Link>
+          </div>
+
+          <div className="flex gap-px bg-white/[0.06] border-t border-white/[0.06]">
+            {recentProjects.map((project) => (
+              <Link
+                key={project.id}
+                href="/app"
+                className="flex-1 flex flex-col gap-1 px-4 py-3 bg-[#0a0a0a] hover:bg-white/[0.02] transition-colors no-underline group"
+              >
+                <p className="text-xs font-medium text-white/60 group-hover:text-white/80 truncate transition-colors">
+                  {project.name}
+                </p>
+                <p className="text-[10px] font-mono text-white/20">
+                  {project.screens} screens · {project.updatedAt}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </motion.div>
+      </div>
     </div>
-  );
-}
-
-function SidebarItem({
-  icon,
-  label,
-  active = false,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  active?: boolean;
-}) {
-  return (
-    <button
-      className={`flex h-9 items-center gap-2.5 rounded-lg px-3 text-sm transition-colors ${
-        active
-          ? "bg-white/[0.08] font-medium text-white"
-          : "text-white/50 hover:bg-white/[0.04] hover:text-white/80"
-      }`}
-    >
-      {icon}
-      {label}
-    </button>
-  );
-}
-
-function HomeIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <path d="M2 6.5L8 2l6 4.5V14a1 1 0 01-1 1H3a1 1 0 01-1-1V6.5z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function ProjectsIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  );
-}
-
-function TemplatesIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <rect x="2" y="2" width="12" height="4" rx="1" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="2" y="8" width="5" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="9" y="8" width="5" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  );
-}
-
-function StarIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <path d="M8 1.5l1.85 3.75 4.15.6-3 2.93.71 4.12L8 10.87 4.29 12.9l.71-4.12-3-2.93 4.15-.6L8 1.5z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <path d="M2.5 4h11M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4M12 4v8.5a1 1 0 01-1 1H5a1 1 0 01-1-1V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function TeamIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M3 14c0-2.76 2.24-5 5-5s5 2.24 5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
   );
 }

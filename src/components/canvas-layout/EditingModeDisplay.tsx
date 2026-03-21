@@ -1,17 +1,28 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useAppDispatch } from "@/store/hooks";
+import { setAgentLogVisible } from "@/store/slices/uiSlice";
 import { StyleGuideIcon } from "@/lib/svg-icons";
+import { sendChatMessage } from "@/lib/chat-bridge";
+import { ChatPanel } from "./ChatPanel";
 
 export function EditingModeDisplay() {
+  const dispatch = useAppDispatch();
   const [styleGuideOpen, setStyleGuideOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSubmit = () => {
     if (!inputValue.trim()) return;
-    // TODO: send to agent
+    sendChatMessage(inputValue.trim());
     setInputValue("");
+    // Auto-open agent log so user sees activity
+    dispatch(setAgentLogVisible(true));
+    // Reset textarea height
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -23,6 +34,9 @@ export function EditingModeDisplay() {
 
   return (
     <>
+      {/* ChatPanel — invisible but runs useChat hook and processes agent logic */}
+      <ChatPanel isVisible={false} onClose={() => {}} />
+
       {/* Bottom center — AI input box */}
       <div className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 w-full max-w-[600px] px-4">
         <div className="rounded-2xl border border-white/[0.18] bg-[#111113]/95 backdrop-blur-2xl shadow-[0_8px_60px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all focus-within:border-white/[0.28] focus-within:shadow-[0_8px_60px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.1)]">
