@@ -5,11 +5,12 @@ import { motion } from 'framer-motion';
 import { Avatar } from '@/components/ui/Avatar';
 
 const cursors = [
-  { name: 'Ava', color: '#fff', x: '8%', y: '25%', delay: 1.0 },
-  { name: 'Marcus', color: '#a1a1aa', x: '85%', y: '18%', delay: 1.4 },
-  { name: 'Priya', color: '#d4d4d8', x: '78%', y: '72%', delay: 1.8 },
-  { name: 'Jake', color: '#a1a1aa', x: '12%', y: '68%', delay: 2.2 },
-  { name: 'Mei', color: '#e4e4e7', x: '90%', y: '45%', delay: 1.2 },
+  { name: 'Ava', color: '#f87171', x: '8%', y: '22%', delay: 0.8 },
+  { name: 'Marcus', color: '#60a5fa', x: '85%', y: '16%', delay: 1.2 },
+  { name: 'Priya', color: '#34d399', x: '78%', y: '72%', delay: 1.6 },
+  { name: 'Jake', color: '#fbbf24', x: '12%', y: '68%', delay: 2.0 },
+  { name: 'Mei', color: '#c084fc', x: '90%', y: '45%', delay: 1.0 },
+  { name: 'Sara', color: '#fb923c', x: '45%', y: '82%', delay: 1.8 },
 ];
 
 export function Hero() {
@@ -52,15 +53,15 @@ export function Hero() {
             animate={{ x: [0, 6, -4, 10, 0], y: [0, -8, 4, -6, 0] }}
             transition={{ duration: 8 + (parseInt(cursor.name, 36) % 4), repeat: Infinity, ease: 'easeInOut' }}
           >
-            <svg width="14" height="18" viewBox="0 0 16 20" fill="none">
-              <path d="M1 1L1 15.5L5.5 11.5L9.5 19L12.5 17.5L8.5 10L14 9L1 1Z" fill={cursor.color} fillOpacity="0.9" stroke="rgba(0,0,0,0.5)" strokeWidth="1" strokeLinejoin="round" />
+            <svg width="16" height="20" viewBox="0 0 16 20" fill="none">
+              <path d="M1 1L1 15.5L5.5 11.5L9.5 19L12.5 17.5L8.5 10L14 9L1 1Z" fill={cursor.color} stroke="white" strokeWidth="1.2" strokeLinejoin="round" />
             </svg>
             <motion.div
-              className="ml-3 -mt-0.5 rounded-md px-2 py-0.5 text-[10px] font-medium shadow-md whitespace-nowrap border border-b-secondary"
-              style={{ backgroundColor: 'rgba(24,24,27,0.9)', color: cursor.color }}
-              initial={{ opacity: 0, x: -6 }}
+              className="ml-4 -mt-0.5 rounded-md px-2 py-0.5 text-[10px] font-semibold shadow-lg whitespace-nowrap"
+              style={{ backgroundColor: cursor.color, color: '#000' }}
+              initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: cursor.delay + 0.25, duration: 0.35 }}
+              transition={{ delay: cursor.delay + 0.3, duration: 0.3 }}
             >
               {cursor.name}
             </motion.div>
