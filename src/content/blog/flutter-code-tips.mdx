@@ -1,0 +1,81 @@
+---
+title: "Flutter Code Generation: Best Practices and Tips"
+description: "Tips for getting the most out of Launchpad AI's Flutter code export. Write better prompts, structure your code, and ship faster."
+date: "2026-02-12"
+author: "Adarsh Kumar"
+authorRole: "Founder"
+category: "Engineering"
+tags: ["flutter", "code-generation", "best-practices", "tips"]
+tldr: "Write specific prompts mentioning Flutter components by name, extract reusable widgets, integrate with state management early, and always customize the generated theme to match your brand."
+published: true
+---
+
+<TLDR>
+Write specific prompts mentioning Flutter components by name, extract reusable widgets, integrate with state management early, and always customize the generated theme to match your brand.
+</TLDR>
+
+## Writing Effective Prompts
+
+The quality of generated code depends heavily on your prompt. Here's how to get the best results.
+
+### Be Specific
+
+Instead of generic descriptions, reference specific UI elements:
+
+- ❌ *"make a login screen"*
+- ✅ *"a login screen with email and password TextFormFields, a Google sign-in button, forgot password link, and dark theme with rounded corners"*
+
+### Mention Components
+
+Reference specific Flutter widgets by name:
+
+- *"use a BottomNavigationBar with 4 tabs"*
+- *"include a SliverAppBar with a hero image"*
+- *"add a FloatingActionButton for creating new items"*
+
+### Specify Layout
+
+Describe the layout structure explicitly:
+
+- *"a Column with a header image, title, description, and a Row of action buttons pinned to the bottom"*
+- *"a GridView with 2 columns showing product cards"*
+
+<Callout type="tip">
+The more specific your prompt, the closer the output matches your vision. Think of it as writing a brief for a developer — clarity prevents revisions.
+</Callout>
+
+## Code Quality Tips
+
+### Widget Extraction
+
+The AI generates complete widget trees. For production code, extract reusable widgets into separate classes:
+
+- Header widgets → `app_header.dart`
+- Card components → `product_card.dart`
+- Form widgets → `login_form.dart`
+
+### State Management
+
+Generated code uses `StatelessWidget` where possible and `StatefulWidget` where state is needed. For complex apps, integrate with your preferred state management:
+
+- **Provider** — Simple, built into Flutter ecosystem
+- **Riverpod** — Type-safe, testable, scalable
+- **BLoC** — Event-driven, great for complex business logic
+
+### Theme Integration
+
+Generated code uses `ThemeData`. Customize the theme to match your brand — all generated widgets automatically pick up the changes.
+
+## Common Patterns
+
+<KeyTakeaways items={[
+  "List screens — use ListView.builder for dynamic content",
+  "Detail screens — CustomScrollView with SliverAppBar for parallax headers",
+  "Form screens — Form widget with TextFormField validation",
+  "Dashboard screens — GridView with card-based layout",
+  "Settings screens — ListView with ListTile sections"
+]} />
+
+---
+
+*AI-generated code is a starting point, not a destination. The best results come from AI speed + human refinement.*

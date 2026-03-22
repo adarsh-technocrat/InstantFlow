@@ -1,6 +1,6 @@
 import { Header } from "@/components/landing/Header";
 import { Footer } from "@/components/landing/Footer";
-import { posts } from "@/lib/blog-data";
+import { getAllPosts } from "@/lib/blog";
 import Link from "next/link";
 
 export const metadata = {
@@ -9,6 +9,8 @@ export const metadata = {
 };
 
 export default function BlogPage() {
+  const posts = getAllPosts();
+
   return (
     <div className="w-full bg-surface text-t-primary">
       <div className="mx-auto max-w-6xl border-x border-b-primary">
@@ -33,50 +35,47 @@ export default function BlogPage() {
           </div>
         </div>
 
-        {/* Post grid — gap-px creates divider lines */}
-        <div className="grid grid-cols-1 md:grid-cols-2 bg-white/[0.12]" style={{ gap: '1px' }}>
+        {/* Post grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 bg-b-primary" style={{ gap: '1px' }}>
           {posts.map((post) => (
             <Link
               key={post.slug}
               href={`/blog/${post.slug}`}
               className="group flex flex-col gap-4 p-6 bg-surface hover:bg-input-bg transition-all no-underline"
             >
-              {/* Category + read time */}
               <div className="flex items-center gap-3">
                 <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider text-t-secondary bg-input-bg border border-b-primary">
-                  {post.category}
+                  {post.frontmatter.category}
                 </span>
-                <span className="text-[10px] text-t-tertiary font-mono">{post.readTime}</span>
+                <span className="text-[10px] text-t-tertiary font-mono">{post.readingTime}</span>
               </div>
 
-              {/* Title */}
               <h2
                 className="text-lg md:text-xl font-semibold text-t-primary group-hover:text-t-primary transition-colors leading-snug"
                 style={{ fontFamily: "var(--font-logo), 'Space Grotesk', sans-serif" }}
               >
-                {post.title}
+                {post.frontmatter.title}
               </h2>
 
-              {/* Excerpt */}
-              <p className="text-sm text-t-secondary leading-relaxed">{post.excerpt}</p>
+              <p className="text-sm text-t-secondary leading-relaxed">{post.frontmatter.description}</p>
 
-              {/* Footer divider */}
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {post.frontmatter.tags.slice(0, 3).map((tag) => (
+                  <span key={tag} className="text-[9px] font-mono uppercase tracking-wider text-t-tertiary border border-b-secondary rounded-full px-2 py-0.5">
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+
               <div className="flex items-center justify-between mt-auto pt-4 border-t border-b-secondary">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-t-secondary">{post.author}</span>
+                  <span className="text-xs font-medium text-t-secondary">{post.frontmatter.author}</span>
                   <span className="text-t-tertiary">·</span>
-                  <span className="text-[11px] text-t-tertiary font-mono">{post.date}</span>
+                  <time className="text-[11px] text-t-tertiary font-mono" dateTime={post.frontmatter.date}>
+                    {new Date(post.frontmatter.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </time>
                 </div>
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  className="text-t-tertiary group-hover:text-t-secondary transition-colors"
-                >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-t-tertiary group-hover:text-t-secondary transition-colors">
                   <path d="M5 12h14M12 5l7 7-7 7" />
                 </svg>
               </div>

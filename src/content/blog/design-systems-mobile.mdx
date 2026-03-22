@@ -1,0 +1,88 @@
+---
+title: "Building Design Systems for Flutter Apps"
+description: "Learn how to create consistent, scalable design systems with tokens, components, and patterns for Flutter applications."
+date: "2026-03-10"
+author: "Adarsh Kumar"
+authorRole: "Founder"
+category: "Tutorial"
+tags: ["design-systems", "flutter", "tutorial", "theming"]
+tldr: "A design system for Flutter starts with design tokens (colors, typography, spacing), builds up to reusable components, and scales with semantic naming. Launchpad AI can generate code that follows your design system."
+published: true
+---
+
+<TLDR>
+A design system for Flutter starts with design tokens (colors, typography, spacing), builds up to reusable components, and scales with semantic naming. Launchpad AI can generate code that follows your design system.
+</TLDR>
+
+## Why Design Systems Matter
+
+Design systems ensure consistency across your app. They define reusable components, color tokens, typography scales, and spacing rules that every screen follows.
+
+Without a design system, you end up with:
+
+- Inconsistent button styles across screens
+- Hardcoded colors scattered throughout the codebase
+- Typography that varies randomly
+- Spacing that feels "off" but you can't pinpoint why
+
+## Design Tokens
+
+Design tokens are the smallest pieces of your design system — colors, fonts, spacing values, and border radii.
+
+### Color Tokens
+
+Define your color palette as a set of **semantic tokens** rather than raw hex values:
+
+- **Primary** — Your brand's main color
+- **Secondary** — Supporting accent color
+- **Surface** — Background colors for cards and containers
+- **Error** — Validation and error states
+- **On-Primary** — Text color on primary backgrounds
+
+### Typography Scale
+
+Establish a clear hierarchy with consistent sizes and weights. Flutter's `TextTheme` makes this straightforward:
+
+- **Display** — Hero text, landing pages
+- **Headline** — Section headers
+- **Title** — Card titles, list headers
+- **Body** — Regular content text
+- **Label** — Buttons, captions, metadata
+
+### Spacing Scale
+
+Use a consistent spacing scale based on a base unit (e.g., 4px):
+
+- `xs` — 4px
+- `sm` — 8px
+- `md` — 16px
+- `lg` — 24px
+- `xl` — 32px
+- `2xl` — 48px
+
+## Component Library
+
+Build your components on top of your tokens:
+
+- **Buttons** — Primary, secondary, text, icon variants
+- **Input fields** — Text, search, dropdown, with validation states
+- **Cards** — Content containers with consistent padding and border radius
+- **Navigation** — Bottom nav, app bar, drawer
+
+<Callout type="info">
+When you generate screens with Launchpad AI, you can specify your design system. The AI will use your tokens and patterns to generate consistent code across all screens.
+</Callout>
+
+## Best Practices
+
+<KeyTakeaways items={[
+  "Use semantic names (primary, surface) not raw values (#FF5733)",
+  "Keep your token set small — you can always add more later",
+  "Document everything with examples",
+  "Test your components in isolation before composing screens",
+  "Use ThemeData to centralize your design tokens in Flutter"
+]} />
+
+---
+
+*Design systems are living documents. Start simple, iterate often, and let your team's needs guide the evolution.*
