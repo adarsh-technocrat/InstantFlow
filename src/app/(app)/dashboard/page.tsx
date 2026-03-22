@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Project {
   id: string;
@@ -71,14 +72,23 @@ function StreamingPlaceholder() {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { user, loading: authLoading, signOut } = useAuth();
   const [inputValue, setInputValue] = useState("");
   const [showAllProjects, setShowAllProjects] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // Redirect if not signed in
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace("/signin");
+    }
+  }, [user, authLoading, router]);
+
   // Fetch projects
   useEffect(() => {
+    if (!user) return;
     fetch("/api/projects")
       .then((r) => r.json())
       .then((data: { projects?: Project[] }) => {
@@ -86,7 +96,7 @@ export default function DashboardPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [user]);
 
   // Create new project and navigate
   const createProject = useCallback(
@@ -108,6 +118,17 @@ export default function DashboardPage() {
     if (!inputValue.trim()) return;
     createProject(inputValue.trim());
   };
+
+  if (authLoading || !user) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-surface">
+        <div className="flex items-center gap-2 text-sm text-t-secondary">
+          <div className="size-2 rounded-full bg-t-tertiary animate-pulse" />
+          Loading...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen w-full bg-surface text-t-primary p-3">
@@ -131,10 +152,18 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-mono text-t-tertiary uppercase tracking-wider">Dashboard</span>
             <div className="ml-2 h-4 w-px bg-input-bg" />
-            <button className="flex h-7 w-7 items-center justify-center rounded-full border border-b-primary text-t-secondary hover:text-t-primary hover:border-b-strong transition-colors">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
-              </svg>
+            <button
+              onClick={() => signOut().then(() => router.replace("/signin"))}
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-b-primary overflow-hidden hover:border-b-strong transition-colors"
+              title="Sign out"
+            >
+              {user?.photoURL ? (
+                <img src={user.photoURL} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-t-secondary">
+                  <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
+                </svg>
+              )}
             </button>
           </div>
         </header>

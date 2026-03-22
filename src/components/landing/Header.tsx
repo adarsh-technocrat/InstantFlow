@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Logo } from './Logo';
+import { useAuth } from '@/contexts/AuthContext';
 
 const navLinks = [
   { label: 'Features', href: '/#features' },
@@ -14,6 +15,7 @@ const navLinks = [
 
 export function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { user, loading } = useAuth();
 
   return (
     <header className="sticky top-0 z-50 border-b border-b-primary bg-surface/80 backdrop-blur-lg">
@@ -33,18 +35,43 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <a
-            href="/signin"
-            className="hidden sm:inline-flex px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-t-secondary hover:text-t-primary transition-colors no-underline font-mono"
-          >
-            Sign in
-          </a>
-          <a
-            href="/app"
-            className="inline-flex h-9 items-center px-5 rounded border border-b-strong bg-btn-primary-bg text-[11px] font-semibold uppercase tracking-wider text-btn-primary-text hover:opacity-90 transition-colors no-underline font-mono"
-          >
-            Get Started
-          </a>
+          {loading ? null : user ? (
+            <>
+              <Link
+                href="/dashboard"
+                className="hidden sm:inline-flex px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-t-secondary hover:text-t-primary transition-colors no-underline font-mono"
+              >
+                Dashboard
+              </Link>
+              <Link
+                href="/dashboard"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-b-primary overflow-hidden"
+              >
+                {user.photoURL ? (
+                  <img src={user.photoURL} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-xs font-semibold text-t-secondary">
+                    {user.displayName?.[0] ?? user.email?.[0] ?? "U"}
+                  </span>
+                )}
+              </Link>
+            </>
+          ) : (
+            <>
+              <a
+                href="/signin"
+                className="hidden sm:inline-flex px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-t-secondary hover:text-t-primary transition-colors no-underline font-mono"
+              >
+                Sign in
+              </a>
+              <a
+                href="/app"
+                className="inline-flex h-9 items-center px-5 rounded border border-b-strong bg-btn-primary-bg text-[11px] font-semibold uppercase tracking-wider text-btn-primary-text hover:opacity-90 transition-colors no-underline font-mono"
+              >
+                Get Started
+              </a>
+            </>
+          )}
           <button
             type="button"
             aria-label="Menu"

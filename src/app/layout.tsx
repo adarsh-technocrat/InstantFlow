@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Sans, Geist_Mono, Space_Grotesk } from "next/font/google";
+import { AuthProvider } from "@/contexts/AuthContext";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -41,7 +42,7 @@ export default function RootLayout({
       <body
         className={`${dmSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} font-sans antialiased`}
       >
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );
