@@ -191,7 +191,7 @@ export default function DashboardPage() {
 
               {/* Prompt input */}
               <motion.div className="w-full max-w-[580px]" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.6 }}>
-                <div className="rounded-2xl border border-b-strong bg-surface-elevated/90 backdrop-blur-xl shadow-[0_8px_48px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all focus-within:border-b-strong">
+                <div className="rounded-2xl border border-b-strong bg-surface-elevated/90 backdrop-blur-xl transition-all focus-within:border-b-strong">
                   <div className="px-4 pt-4 pb-2 relative">
                     {!inputValue && (
                       <div className="absolute inset-x-4 top-4 pointer-events-none text-[15px] leading-relaxed">

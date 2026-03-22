@@ -8,7 +8,7 @@
   --background: #faf8f5;
   --foreground: #1c1917;
   --background-secondary: #f5f0eb;
-  --border: #e7e0d8;
+  --border: #ddd5cc;
   --ring: #1c1917;
   --accent: #f0ebe5;
   --accent-foreground: #1c1917;
@@ -34,9 +34,9 @@
   --text-secondary: #57534e;
   --text-tertiary: #a8a29e;
   --text-inverted: #faf8f5;
-  --border-primary: #e7e0d8;
-  --border-secondary: rgba(0, 0, 0, 0.06);
-  --border-strong: rgba(0, 0, 0, 0.12);
+  --border-primary: #ddd5cc;
+  --border-secondary: rgba(0, 0, 0, 0.1);
+  --border-strong: rgba(0, 0, 0, 0.18);
   --canvas-bg: #f0ebe5;
   --canvas-dot: rgba(0, 0, 0, 0.08);
   --canvas-panel-bg: rgba(255, 255, 255, 0.92);

@@ -85,7 +85,7 @@ function CanvasPanel() {
 
       {/* Bottom center — prompt box */}
       <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-20 w-[85%] max-w-[400px]">
-        <div className="rounded-xl border border-b-primary bg-surface-elevated/90 backdrop-blur-xl px-3.5 py-2.5 shadow-[0_4px_24px_rgba(0,0,0,0.4)]">
+        <div className="rounded-xl border border-b-primary bg-surface-elevated/90 backdrop-blur-xl px-3.5 py-2.5">
           <div className="flex items-center gap-2">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-t-tertiary flex-shrink-0">
               <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />

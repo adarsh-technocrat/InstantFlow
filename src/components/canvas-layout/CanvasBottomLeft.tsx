@@ -137,7 +137,7 @@ export function CanvasBottomLeft() {
     <div className="absolute bottom-4 left-4 z-10 flex flex-col items-start gap-2">
       {/* Log panel */}
       {logVisible && (
-        <div className="w-[260px] max-h-[560px] flex flex-col rounded-xl border border-b-primary bg-surface-elevated/90 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.4)] overflow-hidden">
+        <div className="w-[260px] max-h-[560px] flex flex-col rounded-xl border border-b-primary bg-surface-elevated/90 backdrop-blur-xl overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-3 py-2 border-b border-b-secondary flex-shrink-0">
             <span className="text-[10px] font-mono font-medium uppercase tracking-wider text-white/35">Activity</span>
