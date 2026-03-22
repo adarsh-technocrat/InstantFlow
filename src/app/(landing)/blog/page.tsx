@@ -8,8 +8,10 @@ export const metadata = {
   description: "Latest updates, tips, and stories from Launchpad AI",
 };
 
-export default function BlogPage() {
-  const posts = getAllPosts();
+export const dynamic = "force-dynamic";
+
+export default async function BlogPage() {
+  const posts = await getAllPosts();
 
   return (
     <div className="w-full bg-surface text-t-primary">

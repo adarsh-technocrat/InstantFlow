@@ -3,20 +3,19 @@ import Link from "next/link";
 import { Header } from "@/components/landing/Header";
 import { Footer } from "@/components/landing/Footer";
 import { MdxRenderer } from "@/components/blog/MdxRenderer";
-import { getAllPosts, getPostBySlug, getAllSlugs, getRelatedPosts } from "@/lib/blog";
+import { CollapsibleTLDR } from "@/components/blog/CollapsibleTLDR";
+import { getAllPosts, getPostBySlug, getRelatedPosts } from "@/lib/blog";
 import type { Metadata } from "next";
+
+export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
-export async function generateStaticParams() {
-  return getAllSlugs().map((slug) => ({ slug }));
-}
-
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const post = getPostBySlug(slug);
+  const post = await getPostBySlug(slug);
   if (!post) return { title: "Post Not Found" };
 
   const { frontmatter: fm } = post;
@@ -48,53 +47,37 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function BlogPostPage({ params }: PageProps) {
   const { slug } = await params;
-  const post = getPostBySlug(slug);
+  const post = await getPostBySlug(slug);
   if (!post) notFound();
 
   const { frontmatter: fm } = post;
-  const mdxContent = post.content;
-  const allPosts = getAllPosts();
+  const allPosts = await getAllPosts();
   const currentIndex = allPosts.findIndex((p) => p.slug === slug);
   const prevPost = currentIndex < allPosts.length - 1 ? allPosts[currentIndex + 1] : null;
   const nextPost = currentIndex > 0 ? allPosts[currentIndex - 1] : null;
-  const relatedPosts = getRelatedPosts(slug, 3);
+  const relatedPosts = await getRelatedPosts(slug, 3);
 
-  // JSON-LD structured data
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
     headline: fm.title,
     description: fm.description,
     datePublished: fm.date,
-    author: {
-      "@type": "Person",
-      name: fm.author,
-      ...(fm.authorRole && { jobTitle: fm.authorRole }),
-    },
-    publisher: {
-      "@type": "Organization",
-      name: "Launchpad AI",
-    },
+    author: { "@type": "Person", name: fm.author, ...(fm.authorRole && { jobTitle: fm.authorRole }) },
+    publisher: { "@type": "Organization", name: "Launchpad AI" },
     wordCount: post.wordCount,
     keywords: fm.tags.join(", "),
-    mainEntityOfPage: {
-      "@type": "WebPage",
-      "@id": `/blog/${slug}`,
-    },
+    mainEntityOfPage: { "@type": "WebPage", "@id": `/blog/${slug}` },
   };
 
   return (
     <div className="w-full bg-surface text-t-primary">
-      {/* JSON-LD */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <div className="mx-auto max-w-6xl border-x border-b-primary">
         <Header />
 
-        {/* Breadcrumb + back */}
+        {/* Breadcrumb */}
         <nav className="px-5 py-3 border-b border-b-primary flex items-center gap-2 text-[11px] font-mono text-t-tertiary" aria-label="Breadcrumb">
           <Link href="/" className="hover:text-t-secondary transition-colors no-underline">Home</Link>
           <span>/</span>
@@ -106,46 +89,27 @@ export default async function BlogPostPage({ params }: PageProps) {
         {/* Article header */}
         <header className="border-b border-b-primary">
           <div className="px-6 md:px-16 py-12 md:py-16 max-w-3xl mx-auto">
-            {/* Category + meta */}
             <div className="flex flex-wrap items-center gap-3 mb-6">
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider text-t-secondary bg-input-bg border border-b-primary">
-                {fm.category}
-              </span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider text-t-secondary bg-input-bg border border-b-primary">{fm.category}</span>
               <span className="text-[10px] text-t-tertiary font-mono">{post.readingTime}</span>
               <span className="text-[10px] text-t-tertiary font-mono">·</span>
               <span className="text-[10px] text-t-tertiary font-mono">{post.wordCount} words</span>
             </div>
 
-            {/* Title */}
-            <h1
-              className="text-2xl md:text-4xl font-semibold leading-tight tracking-tight text-t-primary"
-              style={{ fontFamily: "var(--font-logo), 'Space Grotesk', sans-serif" }}
-            >
+            <h1 className="text-2xl md:text-4xl font-semibold leading-tight tracking-tight text-t-primary" style={{ fontFamily: "var(--font-logo), 'Space Grotesk', sans-serif" }}>
               {fm.title}
             </h1>
 
-            {/* Description */}
-            <p className="mt-4 text-base md:text-lg text-t-secondary leading-relaxed">
-              {fm.description}
-            </p>
+            <p className="mt-4 text-base md:text-lg text-t-secondary leading-relaxed">{fm.description}</p>
 
-            {/* Tags */}
             <div className="flex flex-wrap gap-2 mt-6">
               {fm.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="text-[9px] font-mono uppercase tracking-wider text-t-tertiary border border-b-secondary rounded-full px-2 py-0.5"
-                >
-                  #{tag}
-                </span>
+                <span key={tag} className="text-[9px] font-mono uppercase tracking-wider text-t-tertiary border border-b-secondary rounded-full px-2 py-0.5">#{tag}</span>
               ))}
             </div>
 
-            {/* Author + date */}
             <div className="flex items-center gap-3 mt-8 pt-6 border-t border-b-secondary">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-input-bg border border-b-secondary text-sm font-semibold text-t-secondary">
-                {fm.author[0]}
-              </div>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-input-bg border border-b-secondary text-sm font-semibold text-t-secondary">{fm.author[0]}</div>
               <div>
                 <p className="text-sm font-medium text-t-primary">{fm.author}</p>
                 <div className="flex items-center gap-2">
@@ -160,10 +124,17 @@ export default async function BlogPostPage({ params }: PageProps) {
           </div>
         </header>
 
+        {/* Collapsible TL;DR */}
+        {fm.tldr && (
+          <div className="border-b border-b-primary px-6 md:px-16 max-w-3xl mx-auto">
+            <CollapsibleTLDR text={fm.tldr} />
+          </div>
+        )}
+
         {/* Article content */}
         <div className="border-b border-b-primary">
           <article className="px-6 md:px-16 py-10 md:py-14 max-w-3xl mx-auto">
-            <MdxRenderer source={mdxContent} />
+            <MdxRenderer source={post.content} />
           </article>
         </div>
 
@@ -175,15 +146,9 @@ export default async function BlogPostPage({ params }: PageProps) {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3">
               {relatedPosts.map((rp, i) => (
-                <Link
-                  key={rp.slug}
-                  href={`/blog/${rp.slug}`}
-                  className={`group flex flex-col gap-2 p-5 hover:bg-input-bg transition-colors no-underline ${
-                    i < relatedPosts.length - 1 ? "border-b md:border-b-0 md:border-r border-b-primary" : ""
-                  }`}
-                >
+                <Link key={rp.slug} href={`/blog/${rp.slug}`} className={`group flex flex-col gap-2 p-5 hover:bg-input-bg transition-colors no-underline ${i < relatedPosts.length - 1 ? "border-b md:border-b-0 md:border-r border-b-primary" : ""}`}>
                   <span className="text-[9px] font-mono uppercase tracking-wider text-t-tertiary">{rp.frontmatter.category}</span>
-                  <span className="text-sm font-medium text-t-primary group-hover:text-t-primary leading-snug">{rp.frontmatter.title}</span>
+                  <span className="text-sm font-medium text-t-primary leading-snug">{rp.frontmatter.title}</span>
                   <span className="text-[10px] font-mono text-t-tertiary">{rp.readingTime}</span>
                 </Link>
               ))}
@@ -191,13 +156,10 @@ export default async function BlogPostPage({ params }: PageProps) {
           </div>
         )}
 
-        {/* Prev/Next navigation */}
+        {/* Prev/Next */}
         <div className="grid grid-cols-1 md:grid-cols-2 border-b border-b-primary">
           {prevPost ? (
-            <Link
-              href={`/blog/${prevPost.slug}`}
-              className="group flex flex-col gap-2 p-6 border-b md:border-b-0 md:border-r border-b-primary hover:bg-input-bg transition-colors no-underline"
-            >
+            <Link href={`/blog/${prevPost.slug}`} className="group flex flex-col gap-2 p-6 border-b md:border-b-0 md:border-r border-b-primary hover:bg-input-bg transition-colors no-underline">
               <span className="text-[10px] font-mono uppercase tracking-wider text-t-tertiary">← Older</span>
               <span className="text-sm font-medium text-t-primary">{prevPost.frontmatter.title}</span>
             </Link>
@@ -205,10 +167,7 @@ export default async function BlogPostPage({ params }: PageProps) {
             <div className="border-b md:border-b-0 md:border-r border-b-primary" />
           )}
           {nextPost ? (
-            <Link
-              href={`/blog/${nextPost.slug}`}
-              className="group flex flex-col gap-2 p-6 items-end text-right hover:bg-input-bg transition-colors no-underline"
-            >
+            <Link href={`/blog/${nextPost.slug}`} className="group flex flex-col gap-2 p-6 items-end text-right hover:bg-input-bg transition-colors no-underline">
               <span className="text-[10px] font-mono uppercase tracking-wider text-t-tertiary">Newer →</span>
               <span className="text-sm font-medium text-t-primary">{nextPost.frontmatter.title}</span>
             </Link>

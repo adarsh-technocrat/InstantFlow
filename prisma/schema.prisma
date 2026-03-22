@@ -37,3 +37,19 @@ model Frame {
   html      String   @db.Text
   updatedAt DateTime @updatedAt
 }
+
+model BlogPost {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  description String   @db.Text
+  content     String   @db.Text
+  tldr        String?  @db.Text
+  category    String
+  tags        String[]
+  author      String
+  authorRole  String?
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
