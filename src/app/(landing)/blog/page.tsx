@@ -1,74 +1,12 @@
 import { Header } from "@/components/landing/Header";
 import { Footer } from "@/components/landing/Footer";
+import { posts } from "@/lib/blog-data";
 import Link from "next/link";
 
 export const metadata = {
   title: "Blog - Launchpad AI",
   description: "Latest updates, tips, and stories from Launchpad AI",
 };
-
-const posts = [
-  {
-    slug: "introducing-launchpad-ai",
-    title: "Introducing Launchpad AI: Design to Flutter Code with AI",
-    excerpt: "Describe your app idea, get beautiful designs and production-ready Flutter code in seconds.",
-    date: "Mar 15, 2026",
-    category: "Announcement",
-    readTime: "4 min",
-    author: "Adarsh Kumar",
-    image: "https://lh3.googleusercontent.com/CwGQkERZQIadMhpEphW3k58HmhCs02NQRYpR9L_GIhU7qHIDfQlJp-ykadYDGA-x6_Bkq_Ea2r-fFr3rv4kW8Xw9A1DgJuD9hlE5Fw",
-  },
-  {
-    slug: "design-systems-mobile",
-    title: "Building Design Systems for Flutter Apps",
-    excerpt: "Create consistent, scalable design systems with tokens, components, and patterns for Flutter.",
-    date: "Mar 10, 2026",
-    category: "Tutorial",
-    readTime: "7 min",
-    author: "Adarsh Kumar",
-    image: "https://lh3.googleusercontent.com/-MMEDlQhYVE8CLSReq5dD_9s_mXvDaJUB8HaM-gKSh4LUsgjpQOK3ov7qdaH7hsVFDF0rc3L6Hi1ppWlaWx-rYMhK8IAViAM-Gk",
-  },
-  {
-    slug: "ai-design-workflow",
-    title: "How AI is Changing the Mobile Design Workflow",
-    excerpt: "From wireframes to high-fidelity mockups, AI tools are transforming how designers work.",
-    date: "Mar 5, 2026",
-    category: "Insights",
-    readTime: "5 min",
-    author: "Adarsh Kumar",
-    image: "https://lh3.googleusercontent.com/D6d1SQF0r3pePXE2e02y5nuvncVNFlQTMLmJm8ycWnjxC0Re9wQdvjQWHgcYYpduzGd7_QrfUTjC-OBUjDHOf_vWQ7fkMSRyEwhJ",
-  },
-  {
-    slug: "flutter-export-guide",
-    title: "From Design to Flutter: Exporting Production-Ready Code",
-    excerpt: "Step-by-step guide on exporting clean Dart & Flutter widget code from Launchpad AI.",
-    date: "Feb 28, 2026",
-    category: "Tutorial",
-    readTime: "6 min",
-    author: "Adarsh Kumar",
-    image: "https://lh3.googleusercontent.com/7zm0iGoJpEdqqpo4GoqcLdOn0k-s9ZEMVy4MYn6Ia_3_FLlOzKHpb2iLlq7mVaLN7E4_5raueLuya7-MuvUyWFILPxBSdhTTz1XN",
-  },
-  {
-    slug: "mobile-ux-patterns",
-    title: "10 Mobile UX Patterns Every Designer Should Know",
-    excerpt: "Essential mobile UX patterns — from navigation to gestures — that make apps feel intuitive.",
-    date: "Feb 20, 2026",
-    category: "Design",
-    readTime: "8 min",
-    author: "Adarsh Kumar",
-    image: "https://lh3.googleusercontent.com/CwGQkERZQIadMhpEphW3k58HmhCs02NQRYpR9L_GIhU7qHIDfQlJp-ykadYDGA-x6_Bkq_Ea2r-fFr3rv4kW8Xw9A1DgJuD9hlE5Fw",
-  },
-  {
-    slug: "flutter-code-tips",
-    title: "Flutter Code Generation: Best Practices and Tips",
-    excerpt: "Tips for getting the most out of Launchpad AI's Flutter code export.",
-    date: "Feb 12, 2026",
-    category: "Engineering",
-    readTime: "6 min",
-    author: "Adarsh Kumar",
-    image: "https://lh3.googleusercontent.com/kpKlgqVM9HpnzkABysl_zNiUI-dgwj1kzHnRnh1qkwyxedx6b7dqHkTnNa8cvACvifn2lIHWb95KStpEgveKsl621OibIwFtkky-Ng=w1200",
-  },
-];
 
 export default function BlogPage() {
   return (
