@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
+import { ThemeToggleCompact } from "@/components/ThemeToggle";
 
 interface Project {
   id: string;
@@ -151,7 +152,9 @@ export default function DashboardPage() {
           </Link>
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-mono text-t-tertiary uppercase tracking-wider">Dashboard</span>
-            <div className="ml-2 h-4 w-px bg-input-bg" />
+            <div className="ml-1 h-4 w-px bg-input-bg" />
+            <ThemeToggleCompact />
+            <div className="h-4 w-px bg-input-bg" />
             <button
               onClick={() => signOut().then(() => router.replace("/signin"))}
               className="flex h-7 w-7 items-center justify-center rounded-full border border-b-primary overflow-hidden hover:border-b-strong transition-colors"

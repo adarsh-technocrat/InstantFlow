@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Logo } from './Logo';
 import { useAuth } from '@/contexts/AuthContext';
+import { ThemeToggleCompact } from '@/components/ThemeToggle';
 
 const navLinks = [
   { label: 'Features', href: '/#features' },
@@ -35,6 +36,7 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <ThemeToggleCompact />
           {loading ? null : user ? (
             <>
               <Link

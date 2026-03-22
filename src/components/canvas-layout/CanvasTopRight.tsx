@@ -1,6 +1,7 @@
 "use client";
 
 import { Crown, Eye, Share2, User } from "lucide-react";
+import { ThemeToggleCompact } from "@/components/ThemeToggle";
 
 const btnClass =
   "inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-mono font-medium uppercase tracking-wider text-t-secondary transition-colors hover:bg-input-bg hover:text-white disabled:pointer-events-none disabled:opacity-40";
@@ -31,9 +32,11 @@ export function CanvasTopRight() {
 
       <div className="mx-1 h-4 w-px bg-white/[0.12]" />
 
+      <ThemeToggleCompact />
+
       <button
         type="button"
-        className="inline-flex size-8 items-center justify-center rounded-full border border-b-primary text-t-secondary transition-colors hover:bg-input-bg hover:text-white"
+        className="inline-flex size-8 items-center justify-center rounded-full border border-b-primary text-t-secondary transition-colors hover:bg-input-bg hover:text-t-primary"
         aria-label="User profile"
       >
         <User className="size-4" />
