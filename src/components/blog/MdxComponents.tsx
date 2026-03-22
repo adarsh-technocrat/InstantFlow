@@ -1,20 +1,14 @@
-"use client";
-
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { CollapsibleTLDR } from "./CollapsibleTLDR";
 
 function Heading2({ children, id }: { children?: ReactNode; id?: string }) {
   return (
     <h2
       id={id}
-      className="text-xl md:text-2xl font-semibold text-t-primary mt-12 mb-4 scroll-mt-20 group"
+      className="text-xl md:text-2xl font-semibold text-t-primary mt-12 mb-4 scroll-mt-20"
       style={{ fontFamily: "var(--font-logo), 'Space Grotesk', sans-serif" }}
     >
-      {id && (
-        <a href={`#${id}`} className="no-underline text-t-primary">
-          {children}
-        </a>
-      )}
-      {!id && children}
+      {id ? <a href={`#${id}`} className="no-underline text-t-primary">{children}</a> : children}
     </h2>
   );
 }
@@ -26,22 +20,14 @@ function Heading3({ children, id }: { children?: ReactNode; id?: string }) {
       className="text-lg font-semibold text-t-primary mt-8 mb-3 scroll-mt-20"
       style={{ fontFamily: "var(--font-logo), 'Space Grotesk', sans-serif" }}
     >
-      {id ? (
-        <a href={`#${id}`} className="no-underline text-t-primary">
-          {children}
-        </a>
-      ) : (
-        children
-      )}
+      {id ? <a href={`#${id}`} className="no-underline text-t-primary">{children}</a> : children}
     </h3>
   );
 }
 
 export const mdxComponents = {
   h1: ({ children }: { children?: ReactNode }) => (
-    <h1 className="text-2xl md:text-3xl font-semibold text-t-primary mt-10 mb-4" style={{ fontFamily: "var(--font-logo), 'Space Grotesk', sans-serif" }}>
-      {children}
-    </h1>
+    <h1 className="text-2xl md:text-3xl font-semibold text-t-primary mt-10 mb-4" style={{ fontFamily: "var(--font-logo), 'Space Grotesk', sans-serif" }}>{children}</h1>
   ),
   h2: Heading2,
   h3: Heading3,
@@ -75,94 +61,38 @@ export const mdxComponents = {
       className="text-t-primary underline underline-offset-2 decoration-b-primary hover:decoration-t-primary transition-colors"
       target={href?.startsWith("http") ? "_blank" : undefined}
       rel={href?.startsWith("http") ? "noopener noreferrer" : undefined}
-    >
-      {children}
-    </a>
+    >{children}</a>
   ),
   blockquote: ({ children }: { children?: ReactNode }) => (
-    <blockquote className="border-l-2 border-b-strong pl-4 my-6 text-t-secondary italic">
-      {children}
-    </blockquote>
+    <blockquote className="border-l-2 border-b-strong pl-4 my-6 text-t-secondary italic">{children}</blockquote>
   ),
   code: ({ children }: { children?: ReactNode }) => (
-    <code className="rounded bg-input-bg border border-b-secondary px-1.5 py-0.5 font-mono text-[13px] text-t-primary">
-      {children}
-    </code>
+    <code className="rounded bg-input-bg border border-b-secondary px-1.5 py-0.5 font-mono text-[13px] text-t-primary">{children}</code>
   ),
   pre: ({ children }: { children?: ReactNode }) => (
-    <pre className="mb-5 overflow-x-auto rounded-lg bg-surface-elevated border border-b-primary p-4 font-mono text-sm text-t-secondary">
-      {children}
-    </pre>
+    <pre className="mb-5 overflow-x-auto rounded-lg bg-surface-elevated border border-b-primary p-4 font-mono text-sm text-t-secondary">{children}</pre>
   ),
   hr: () => <hr className="my-10 border-t border-b-primary" />,
   img: ({ src, alt }: { src?: string; alt?: string }) => (
     <figure className="my-8">
-      <img
-        src={src}
-        alt={alt ?? ""}
-        className="w-full rounded-lg border border-b-primary"
-        loading="lazy"
-      />
-      {alt && (
-        <figcaption className="mt-2 text-center text-xs text-t-tertiary font-mono">
-          {alt}
-        </figcaption>
-      )}
+      <img src={src} alt={alt ?? ""} className="w-full rounded-lg border border-b-primary" loading="lazy" />
+      {alt && <figcaption className="mt-2 text-center text-xs text-t-tertiary font-mono">{alt}</figcaption>}
     </figure>
   ),
   table: ({ children }: { children?: ReactNode }) => (
-    <div className="mb-5 overflow-x-auto">
-      <table className="w-full border-collapse text-sm">{children}</table>
-    </div>
+    <div className="mb-5 overflow-x-auto"><table className="w-full border-collapse text-sm">{children}</table></div>
   ),
   th: ({ children }: { children?: ReactNode }) => (
-    <th className="border border-b-primary bg-input-bg px-3 py-2 text-left text-xs font-mono font-semibold uppercase tracking-wider text-t-secondary">
-      {children}
-    </th>
+    <th className="border border-b-primary bg-input-bg px-3 py-2 text-left text-xs font-mono font-semibold uppercase tracking-wider text-t-secondary">{children}</th>
   ),
   td: ({ children }: { children?: ReactNode }) => (
     <td className="border border-b-secondary px-3 py-2 text-sm text-t-secondary">{children}</td>
   ),
 };
 
-// Custom blog components authors can use in MDX
+// Interactive components — these are client components imported from separate files
 export function TLDR({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState(true);
-
-  return (
-    <div className="my-8">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 text-left mb-2"
-      >
-        <span className="text-[10px] font-mono font-semibold uppercase tracking-widest text-t-tertiary">TL;DR</span>
-        <div className="h-px flex-1 bg-b-secondary" />
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          className={`text-t-tertiary shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-        >
-          <path d="M6 9l6 6 6-6" />
-        </svg>
-      </button>
-      <div
-        className="overflow-hidden transition-all duration-300 ease-in-out"
-        style={{ maxHeight: open ? "500px" : "0px", opacity: open ? 1 : 0 }}
-      >
-        <div className="rounded-xl border border-b-strong bg-input-bg p-5">
-          <div className="text-sm md:text-base text-t-primary leading-relaxed [&>p]:mb-0">
-            {children}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <CollapsibleTLDR>{children}</CollapsibleTLDR>;
 }
 
 export function Callout({ type = "info", children }: { type?: "info" | "warning" | "tip"; children: ReactNode }) {
@@ -175,9 +105,7 @@ export function Callout({ type = "info", children }: { type?: "info" | "warning"
 
   return (
     <div className={`my-6 rounded-xl border p-5 ${styles[type]}`}>
-      <span className="text-[10px] font-mono font-semibold uppercase tracking-widest text-t-tertiary mb-2 block">
-        {labels[type]}
-      </span>
+      <span className="text-[10px] font-mono font-semibold uppercase tracking-widest text-t-tertiary mb-2 block">{labels[type]}</span>
       <div className="text-sm text-t-secondary leading-relaxed [&>p]:mb-0">{children}</div>
     </div>
   );
@@ -187,9 +115,7 @@ export function KeyTakeaways({ items }: { items?: string[] }) {
   if (!items || !Array.isArray(items)) return null;
   return (
     <div className="my-8 rounded-xl border border-b-strong bg-input-bg p-5">
-      <span className="text-[10px] font-mono font-semibold uppercase tracking-widest text-t-tertiary mb-3 block">
-        Key Takeaways
-      </span>
+      <span className="text-[10px] font-mono font-semibold uppercase tracking-widest text-t-tertiary mb-3 block">Key Takeaways</span>
       <ul className="flex flex-col gap-2">
         {items.map((item, i) => (
           <li key={i} className="flex gap-2 text-sm text-t-primary leading-relaxed">
