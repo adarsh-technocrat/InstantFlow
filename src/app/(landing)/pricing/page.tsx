@@ -81,8 +81,9 @@ const plans = [
 ];
 
 function Cell({ children, className = "", border = true }: { children: React.ReactNode; className?: string; border?: boolean }) {
+  void border;
   return (
-    <td className={`px-5 py-4 align-top ${border ? "border-b border-b-primary" : ""} ${className}`}>
+    <td className={`px-5 py-4 align-top ${className}`}>
       {children}
     </td>
   );
@@ -182,9 +183,9 @@ export default function PricingPage() {
 
           {/* Row: Plan header */}
           <tbody>
-            <tr className="border-b border-b-primary">
+            <tr className="border-b border-b-secondary">
               {plans.map((plan, i) => (
-                <Cell key={plan.name} className={i < plans.length - 1 ? "border-r border-b-primary" : ""}>
+                <Cell key={plan.name} className={i < plans.length - 1 ? "border-r border-b-secondary" : ""}>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-semibold text-t-primary" style={{ fontFamily: "var(--font-logo), 'Space Grotesk', sans-serif" }}>{plan.name}</span>
                     {plan.popular && <span className="text-[9px] font-mono uppercase tracking-wider text-btn-primary-text bg-btn-primary-bg rounded px-1.5 py-0.5 font-semibold">Most Popular</span>}
@@ -196,11 +197,11 @@ export default function PricingPage() {
             </tr>
 
             {/* Row: Price */}
-            <tr className="border-b border-b-primary">
+            <tr className="border-b border-b-secondary">
               {plans.map((plan, i) => {
                 const tier = plan[billing];
                 return (
-                  <Cell key={plan.name} className={`py-6 ${i < plans.length - 1 ? "border-r border-b-primary" : ""}`}>
+                  <Cell key={plan.name} className={`py-6 ${i < plans.length - 1 ? "border-r border-b-secondary" : ""}`}>
                     <div className="flex items-baseline gap-0.5">
                       <NumberFlow value={tier.price} format={{ style: "currency", currency: "USD", minimumFractionDigits: 2 }} className="text-[36px] font-light text-t-primary font-mono leading-none" />
                       {tier.period && <span className="text-xs text-t-tertiary font-mono">{tier.period}</span>}
@@ -213,9 +214,9 @@ export default function PricingPage() {
             </tr>
 
             {/* Row: CTA */}
-            <tr className="border-b border-b-primary">
+            <tr className="border-b border-b-secondary">
               {plans.map((plan, i) => (
-                <Cell key={plan.name} className={i < plans.length - 1 ? "border-r border-b-primary" : ""}>
+                <Cell key={plan.name} className={i < plans.length - 1 ? "border-r border-b-secondary" : ""}>
                   <a
                     href="/app"
                     className={`flex h-10 w-full items-center justify-center rounded text-[11px] font-mono font-semibold uppercase tracking-wider transition-colors no-underline ${
@@ -229,9 +230,9 @@ export default function PricingPage() {
             </tr>
 
             {/* Row: Credits */}
-            <tr className="border-b border-b-primary">
+            <tr className="border-b border-b-secondary">
               {plans.map((plan, i) => (
-                <Cell key={plan.name} className={i < plans.length - 1 ? "border-r border-b-primary" : ""}>
+                <Cell key={plan.name} className={i < plans.length - 1 ? "border-r border-b-secondary" : ""}>
                   <p className="text-sm font-medium text-t-primary"><NumberFlow value={plan.credits[billing]} format={{ useGrouping: true }} /> AI credits / {billing === "monthly" ? "month" : "year"}</p>
                   <p className="mt-0.5 text-xs text-t-tertiary">{plan.screens[billing]}</p>
                 </Cell>
@@ -241,7 +242,7 @@ export default function PricingPage() {
             {/* Row: Features */}
             <tr>
               {plans.map((plan, i) => (
-                <Cell key={plan.name} border={false} className={`py-5 ${i < plans.length - 1 ? "border-r border-b-primary" : ""}`}>
+                <Cell key={plan.name} border={false} className={`py-5 ${i < plans.length - 1 ? "border-r border-b-secondary" : ""}`}>
                   <span className="text-[10px] font-mono uppercase tracking-widest text-t-tertiary mb-3 block">Includes</span>
                   <div className="flex flex-col gap-2.5">
                     {plan.features.map((f) => (

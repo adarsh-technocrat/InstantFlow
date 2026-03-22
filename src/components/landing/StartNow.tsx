@@ -1,7 +1,7 @@
 export function StartNow() {
   return (
     <section id="start-now" className="border-b border-b-primary scroll-mt-14">
-      <div className="border-b border-b-primary px-5 py-4">
+      <div className="border-b border-b-secondary px-5 py-4">
         <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-t-tertiary">Get Started</span>
       </div>
 

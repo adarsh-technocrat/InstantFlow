@@ -19,7 +19,7 @@ export function TemplatesCarousel() {
   return (
     <section id="templates" className="border-b border-b-primary scroll-mt-14">
       {/* Header row with border */}
-      <div className="flex items-center justify-between border-b border-b-primary px-5 py-4">
+      <div className="flex items-center justify-between border-b border-b-secondary px-5 py-4">
         <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-t-tertiary">Templates</span>
         <div className="flex gap-1">
           <button onClick={() => scroll('left')} className="h-7 w-7 flex items-center justify-center rounded border border-b-secondary text-t-tertiary hover:text-t-primary hover:border-white/20 transition-colors">

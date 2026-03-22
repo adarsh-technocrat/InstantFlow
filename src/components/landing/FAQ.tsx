@@ -17,13 +17,13 @@ export function FAQ() {
 
   return (
     <section id="faq" className="scroll-mt-14">
-      <div className="border-b border-b-primary px-5 py-4">
+      <div className="border-b border-b-secondary px-5 py-4">
         <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-t-tertiary">FAQ</span>
       </div>
 
       <div className="flex flex-col lg:flex-row">
         {/* Left — heading */}
-        <div className="lg:w-[340px] flex-shrink-0 p-5 lg:p-8 lg:border-r border-b-primary">
+        <div className="lg:w-[340px] flex-shrink-0 p-5 lg:p-8 lg:border-r border-b-secondary">
           <h2
             className="text-2xl md:text-3xl font-semibold tracking-tight text-t-primary"
             style={{ fontFamily: "var(--font-logo), 'Space Grotesk', sans-serif" }}
